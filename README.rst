@@ -10,4 +10,6 @@ The transmission curves are obtained after convolving the original measures take
 
 The effective central wavelenghts as well as the delta lambdas are obtained by calculating the FWHM for each filter. The central lambda corresponds to the mean point at the FWHM.
 
+.. math:: \Delta
+
 TBD
