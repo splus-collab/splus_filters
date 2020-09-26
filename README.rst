@@ -8,6 +8,6 @@ The transmission curves are obtained after convolving the original measures take
 
 .. image:: splus_filters.png
 
-The effective central wavelenghts as well as the ![equation](https://latex.codecogs.com/gif.latex?\Delta\lambda) are obtained by calculating the FWHM of each filter. 
+The effective central wavelenghts as well as the ![equation](http://www.sciweavers.org/tex2img.php?eq=%5CDelta%5Clambda&bc=White&fc=Black&im=jpg&fs=12&ff=arev&edit=0) are obtained by calculating the FWHM of each filter. 
 
 TBD
