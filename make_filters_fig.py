@@ -1,5 +1,5 @@
 # make the filters transmitance for S-PLUS fig
-# v02 from 2020-09-55 by F. R. Herpich
+# v02 from 2020-09-25 by F. R. Herpich
 # contact: herpich@usp.br
 
 from astropy.io import ascii
