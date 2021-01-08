@@ -22,7 +22,7 @@ filters = {'uJAVA': ('uJAVA', 'navy', 3563, -500, -4),
 fig = plt.figure(figsize=(8, 4))
 for key in filters.keys():
     f = ascii.read('%s.dat' % key)
-    plt.plot(f['col0']*10., f['col1']*100., color=filters[key][1], lw=1.5)
+    plt.plot(f['col0'], f['col1']*100., color=filters[key][1], lw=1.5)
     plt.text(filters[key][2] + filters[key][3],
              max(f['col1']*100.) + filters[key][4],
              filters[key][0], fontsize=12, color=filters[key][1])
