@@ -7,6 +7,7 @@ import sys
 import os
 import argparse
 import pandas as pd
+from astropy.io import ascii, fits
 
 
 def get_args():
@@ -33,12 +34,55 @@ def get_args():
     return args
 
 
+def main(args):
+
+    calc_trasm_curve(args)
+
+
 def calc_trasm_curve(args):
     work_dir = args.work_dir
-    list_of_filter_files = os.listdir(os.path.join(work_dir, 'data-from-lab'))
+    data_dir = 'data-from-lab'
+    list_of_filter_files = os.listdir(os.path.join(work_dir, data_dir))
+
+    atm_transm_file = os.path.join(work_dir, data_dir, 'sky_trans.ascii')
+    atmosph_transmitance = pd.read_csv(atm_transm_file, delimiter=' ')
+    atm_wave = atmosph_transmitance['wave']
+    atm_transm = atmosph_transmitance['transm']
+    atm_ius = interp1d(atm_wave, atm_transm)
+
+    mirror_reflectance_file = os.path.join(
+        work_dir, data_dir, 'mirror_reflectance.fits')
+    mirror_reflect = fits.open(mirror_reflectance_file)[1].data
+    mirror_wave = np.array([float(a) for a in mirror_reflect.col1])
+    mirror_reflect = np.array([float(a) for a in mirror_reflect.col2])
+    # the reflectance bellow was obtained from:
+    # https://laserbeamproducts.wordpress.com/2014/06/19/reflectivity-of-aluminium-uv-visible-and-infrared/
+    mr_ius = interp1d(mirror_wave, mirror_reflect)
+    # measured
+    mirror_measured_wave = np.array([300., 350., 420., 470., 530., 650., 880.,
+                                     950., 1000., 1100])
+    mirror_measured_flux = np.array([.9126, .9126, .9126, .9126,
+                                     .911, .8725, .7971, .82, .84, .85])
+    mr_meas = interp1d(mirror_measured_wave, mirror_measured_flux)
+    mask = (mirror_wave > min(mirror_measured_wave)) & (
+        mirror_wave < max(mirror_measured_wave))
+    measur_interp = mr_meas(np.array(mirror_wave)[mask])
+
+    ccd_efficiency_file = os.path.join(work_dir, data_dir, 'ccd_curve.fits')
+    ccd_curve = fits.open(ccd_efficiency_file)[1].data
+    ccd_wave = np.array([float(a) for a in ccd_curve.col1])
+    ccd_eff = np.array([float(a) for a in ccd_curve.col2])
+    ccd_ius = interp1d(np.float_(ccd_wave), np.float_(ccd_eff))
+    # measured
+    ccd_measured_wave = np.array([300., 350., 400., 450., 500., 550., 600.,
+                                  650., 725., 800., 850., 900, 970.])
+    ccd_measured_flux = np.array([.2, .45, .90, .93, .88, .88, .91, .92, .95,
+                                  .88, .8, .6, .3])
+
+    return
     for filter_file in list_of_filter_files:
         print(filter_file)
-        filtre_filename = os.path.join(work_dir, 'data-from-lab', filter_file)
+        filtre_filename = os.path.join(work_dir, data_dir, filter_file)
         df = pd.read_csv(filtre_filename, delimiter='\t',
                          decimal=',', skiprows=42)
         print(df.head())
@@ -46,7 +90,7 @@ def calc_trasm_curve(args):
 
 if __name__ == '__main__':
     args = get_args()
-    calc_trasm_curve(args)
+    main(args)
 
 
 # f = ascii.read(Filter)
