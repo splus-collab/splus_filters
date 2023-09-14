@@ -8,6 +8,7 @@ import os
 import argparse
 import pandas as pd
 from astropy.io import ascii, fits
+import glob
 
 
 def get_args():
@@ -36,7 +37,71 @@ def get_args():
 
 def main(args):
 
+    fnames2filters = {
+        '20150918C080uJAVA02': {'fname': 'uJAVA', 'color': 'b'},
+        '20150429C080F037802': {'fname': 'J0378', 'color': 'royalblue'},
+        '20150922C080F039502': {'fname': 'J0395', 'color': 'skyblue'},
+        '20150923C080F041002': {'fname': 'J0410', 'color': 'forestgreen'},
+        '20150514C080F043002': {'fname': 'J0430', 'color': 'cyan'},
+        '20150924C080gSDSS02': {'fname': 'gDSSS', 'color': 'g'},
+        '20140606C080F051502': {'fname': 'J0515', 'color': 'limegreen'},
+        '20140604C080F062502': {'fname': 'rSDSS', 'color': 'r'},
+        '20140609C080F066002': {'fname': 'J0660', 'color': 'magenta'},
+        '20150506C080iSDSS02': {'fname': 'iSDSS', 'color': 'violet'},
+        '20150922C080F086102': {'fname': 'J0861', 'color': 'brown'},
+        '20150504C080zSDSS02': {'fname': 'zSDSS', 'color': 'purple'}}
+
+    lab_filters = get_lab_curves(args)
+    plot_lab_curves(lab_filters, fnames2filters)
+
     calc_trasm_curve(args)
+
+
+def get_lab_curves(args):
+    work_dir = args.work_dir
+    data_dir = 'data-from-lab'
+    list_of_filter_files = glob.glob(os.path.join(work_dir, data_dir, '*.txt'))
+
+    lab_filters = {}
+    for filter_file in list_of_filter_files:
+        # print(filter_file)
+        n = 1
+        with open(filter_file, 'r') as f:
+            for line in f.readlines():
+                if line.startswith('Wavelength nm'):
+                    break
+                if line.startswith('J-PLUS #07'):
+                    n += 2
+                    break
+                n += 1
+            f.close()
+        # filter_filename = os.path.join(work_dir, data_dir, filter_file)
+        print(n)
+        df = pd.read_csv(filter_file, delimiter='\t',
+                         decimal=',', skiprows=n, header=None)
+        # print(df.head())
+        mid_columns_average = df[df.columns[2:-1]].mean(axis=1)
+        transmission_mean = mid_columns_average / df[[1, 102]].mean(axis=1)
+        wave = df[0]
+        # print(list(zip((wave, transmission_mean))))
+
+        lab_filters[filter_file.split('/')[-1].split('.')[0]] = \
+            {'wave': wave, 'transm': transmission_mean}
+
+    return lab_filters
+
+
+def plot_lab_curves(lab_filters, fnames2filters):
+    fig = plt.figure(figsize=(10, 10))
+    for i, filter_name in enumerate(fnames2filters.keys()):
+        ax = fig.add_subplot(4, 3, i+1)
+        w = lab_filters[filter_name]['wave']
+        t = lab_filters[filter_name]['transm']
+        ax.plot(w, t, lw=1.5, label=fnames2filters[filter_name]['fname'],
+                color=fnames2filters[filter_name]['color'])
+        plt.legend()
+
+    plt.show()
 
 
 def calc_trasm_curve(args):
@@ -78,14 +143,6 @@ def calc_trasm_curve(args):
                                   650., 725., 800., 850., 900, 970.])
     ccd_measured_flux = np.array([.2, .45, .90, .93, .88, .88, .91, .92, .95,
                                   .88, .8, .6, .3])
-
-    return
-    for filter_file in list_of_filter_files:
-        print(filter_file)
-        filtre_filename = os.path.join(work_dir, data_dir, filter_file)
-        df = pd.read_csv(filtre_filename, delimiter='\t',
-                         decimal=',', skiprows=42)
-        print(df.head())
 
 
 if __name__ == '__main__':
