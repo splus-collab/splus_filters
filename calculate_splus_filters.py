@@ -14,18 +14,24 @@ import glob
 def get_args():
     parser = argparse.ArgumentParser(description=" ".join([
         'Calculate the transmission curve or a given filtre.',
-        'Estimate the central lambda from the FWHM of that filtre.']))
+        'Estimate the central lambda from the FWHM of that filter.']))
     # parser.add_argument('--filter_file', type=str,
     #                     help='File containing the lab measures for the filtre.',
     #                     required=True)
-    parser.add_argument('--color', type=str, help='Matplotlib colour to plot the filtre.',
+    parser.add_argument('--color', type=str, help='Matplotlib colour to plot the filter.',
                         default='k')
-    parser.add_argument('--name_of_filter', type=str, help='Name of the filtre.',
-                        default='filtre1')
+    parser.add_argument('--name_of_filter', type=str, help='Name of the filter.',
+                        default='filter1')
     parser.add_argument('--work_dir', type=str, help='Working directory.',
                         default=os.getcwd())
     parser.add_argument('--save_fig', action='store_true',
-                        help='Save the plot of the filtre.')
+                        help='Save the plot of the filter.')
+    parser.add_argument('--save_csv_filters', action='store_true',
+                        help='Save the transmission curve of the filter.')
+    parser.add_argument('--show_individual_filters', action='store_true',
+                        help='Show the individual filters. Only activate when --save_csv_filters is used.')
+    parser.add_argument('--save_lab_fig', action='store_true',
+                        help='Save the plot of the lab filters.')
 
     # if len(sys.argv) == 1:
     #     parser.print_help()
@@ -52,9 +58,10 @@ def main(args):
         '20150504C080zSDSS02': {'fname': 'zSDSS', 'color': 'purple'}}
 
     lab_filters = get_lab_curves(args)
-    plot_lab_curves(lab_filters, fnames2filters)
+    plot_lab_curves(lab_filters, fnames2filters, args)
 
-    calc_trasm_curve(args)
+    allcurves = calc_trasm_curve(lab_filters, fnames2filters, args)
+    plot_all_curves(allcurves)
 
 
 def get_lab_curves(args):
@@ -91,7 +98,7 @@ def get_lab_curves(args):
     return lab_filters
 
 
-def plot_lab_curves(lab_filters, fnames2filters):
+def plot_lab_curves(lab_filters, fnames2filters, args):
     fig = plt.figure(figsize=(10, 10))
     for i, filter_name in enumerate(fnames2filters.keys()):
         ax = fig.add_subplot(4, 3, i+1)
@@ -101,34 +108,41 @@ def plot_lab_curves(lab_filters, fnames2filters):
                 color=fnames2filters[filter_name]['color'])
         plt.legend()
 
-    plt.show()
+    if args.save_lab_fig:
+        plt.savefig(os.path.join(args.work_dir, 'lab_filters.png'), dpi=300)
+    else:
+        plt.show()
 
 
-def calc_trasm_curve(args):
+def calc_trasm_curve(lab_filters, fnames2filters, args):
     work_dir = args.work_dir
     data_dir = 'data-from-lab'
-    list_of_filter_files = os.listdir(os.path.join(work_dir, data_dir))
+    allcurves = {}
 
     atm_transm_file = os.path.join(work_dir, data_dir, 'sky_trans.ascii')
     atmosph_transmitance = pd.read_csv(atm_transm_file, delimiter=' ')
     atm_wave = atmosph_transmitance['wave']
     atm_transm = atmosph_transmitance['transm']
     atm_ius = interp1d(atm_wave, atm_transm)
+    allcurves['atm'] = {'wave': atm_wave, 'transm': atm_transm}
 
     mirror_reflectance_file = os.path.join(
         work_dir, data_dir, 'mirror_reflectance.fits')
     mirror_reflect = fits.open(mirror_reflectance_file)[1].data
     mirror_wave = np.array([float(a) for a in mirror_reflect.col1])
-    mirror_reflect = np.array([float(a) for a in mirror_reflect.col2])
+    mirror_reflect = np.array([float(a) for a in mirror_reflect.col2]) / 100.
     # the reflectance bellow was obtained from:
     # https://laserbeamproducts.wordpress.com/2014/06/19/reflectivity-of-aluminium-uv-visible-and-infrared/
     mr_ius = interp1d(mirror_wave, mirror_reflect)
+    allcurves['mirror'] = {'wave': mirror_wave, 'transm': mirror_reflect}
     # measured
     mirror_measured_wave = np.array([300., 350., 420., 470., 530., 650., 880.,
                                      950., 1000., 1100])
     mirror_measured_flux = np.array([.9126, .9126, .9126, .9126,
                                      .911, .8725, .7971, .82, .84, .85])
     mr_meas = interp1d(mirror_measured_wave, mirror_measured_flux)
+    allcurves['mirror_measured'] = {'wave': mirror_measured_wave,
+                                    'transm': mirror_measured_flux}
     mask = (mirror_wave > min(mirror_measured_wave)) & (
         mirror_wave < max(mirror_measured_wave))
     measur_interp = mr_meas(np.array(mirror_wave)[mask])
@@ -136,13 +150,61 @@ def calc_trasm_curve(args):
     ccd_efficiency_file = os.path.join(work_dir, data_dir, 'ccd_curve.fits')
     ccd_curve = fits.open(ccd_efficiency_file)[1].data
     ccd_wave = np.array([float(a) for a in ccd_curve.col1])
-    ccd_eff = np.array([float(a) for a in ccd_curve.col2])
+    ccd_eff = np.array([float(a) for a in ccd_curve.col2]) / 100.
     ccd_ius = interp1d(np.float_(ccd_wave), np.float_(ccd_eff))
+    allcurves['ccd'] = {'wave': ccd_wave, 'transm': ccd_eff}
     # measured
     ccd_measured_wave = np.array([300., 350., 400., 450., 500., 550., 600.,
                                   650., 725., 800., 850., 900, 970.])
     ccd_measured_flux = np.array([.2, .45, .90, .93, .88, .88, .91, .92, .95,
                                   .88, .8, .6, .3])
+    allcurves['ccd_measured'] = {'wave': ccd_measured_wave,
+                                 'transm': ccd_measured_flux}
+
+    for lab_curve in lab_filters:
+        lab_wave = lab_filters[lab_curve]['wave']
+        lab_transm = lab_filters[lab_curve]['transm']
+        lab_ius = interp1d(lab_wave, lab_transm)
+        xmin = np.array([min(atm_wave / 10.), min(mirror_wave),
+                         min(ccd_wave), min(lab_wave)])
+        xmax = np.array([max(atm_wave / 10.), max(mirror_wave),
+                         max(ccd_wave), max(lab_wave),
+                         max(lab_filters['20150504C080zSDSS02']['wave'])])
+        wave_range = np.arange(max(xmin), max(lab_wave), 1.)
+        new_transm = lab_ius(wave_range)
+        new_atm_transm = atm_ius(wave_range)
+        new_mirror_reflect = mr_ius(wave_range)
+        mirror_measured_wave = np.array(
+            [300., 350., 420., 470., 530., 650., 88.])
+        mirror_measured_flux = np.array(
+            [.9126, .9126, .9126, .9126, .911, .8725, .7971])
+        new_ccd_eff = ccd_ius(wave_range)
+        new_filter_trans = (new_transm * new_atm_transm * new_mirror_reflect *
+                            new_ccd_eff)
+
+        if args.save_csv_filters:
+            dat = wave_range, new_filter_trans
+            outputname = "".join([fnames2filters[lab_curve]['fname'], '.csv'])
+            print('Wrinting file: ', outputname)
+            np.savetxt(outputname, np.transpose(dat), delimiter=',',
+                       header='wavelength,transmittance')
+            if args.show_individual_filters:
+                plt.plot(wave_range, new_filter_trans, fnames2filters[lab_curve]['color'],
+                         label=fnames2filters[lab_curve]['fname'])
+                plt.legend()
+                plt.show()
+        allcurves[fnames2filters[lab_curve]['fname']] = {'wave': wave_range,
+                                                         'transm': new_filter_trans}
+
+    return allcurves
+
+
+def plot_all_curves(allcurves):
+    for curve in allcurves:
+        plt.plot(allcurves[curve]['wave'], allcurves[curve]['transm'],
+                 label=curve)
+    plt.legend()
+    plt.show()
 
 
 if __name__ == '__main__':
