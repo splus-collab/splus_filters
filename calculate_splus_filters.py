@@ -61,7 +61,7 @@ def main(args):
     plot_lab_curves(lab_filters, fnames2filters, args)
 
     allcurves = calc_trasm_curve(lab_filters, fnames2filters, args)
-    plot_all_curves(allcurves)
+    plot_all_curves(allcurves, args)
 
 
 def get_lab_curves(args):
@@ -199,11 +199,19 @@ def calc_trasm_curve(lab_filters, fnames2filters, args):
     return allcurves
 
 
-def plot_all_curves(allcurves):
+def plot_all_curves(allcurves, args):
+    work_dir = args.work_dir
+    plt.figure(figsize=(10, 6))
     for curve in allcurves:
         plt.plot(allcurves[curve]['wave'], allcurves[curve]['transm'],
                  label=curve)
-    plt.legend()
+    plt.xlim(300, 1100)
+    plt.ylim(0, 1)
+    plt.xlabel('Wavelength (nm)')
+    plt.ylabel('Transmittance')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plt.tight_layout()
+    plt.savefig(os.path.join(work_dir, 'allcurves.png'), dpi=300)
     plt.show()
 
 
