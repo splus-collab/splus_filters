@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import os
 import argparse
 import pandas as pd
-from astropy.io import ascii, fits
+from astropy.io import fits
 import glob
 
 
@@ -31,6 +31,8 @@ def get_args():
                         help='Show the individual filters. Only activate when --save_csv_filters is used.')
     parser.add_argument('--save_lab_fig', action='store_true',
                         help='Save the plot of the lab filters.')
+    parser.add_argument('--loglevel', type=str, help='Log level.',
+                        default='INFO')
 
     # if len(sys.argv) == 1:
     #     parser.print_help()
@@ -43,18 +45,18 @@ def get_args():
 def main(args):
 
     fnames2filters = {
-        '20150918C080uJAVA02': {'fname': 'uJAVA', 'color': 'b'},
-        '20150429C080F037802': {'fname': 'J0378', 'color': 'royalblue'},
-        '20150922C080F039502': {'fname': 'J0395', 'color': 'skyblue'},
-        '20150923C080F041002': {'fname': 'J0410', 'color': 'forestgreen'},
-        '20150514C080F043002': {'fname': 'J0430', 'color': 'cyan'},
-        '20150924C080gSDSS02': {'fname': 'gDSSS', 'color': 'g'},
-        '20140606C080F051502': {'fname': 'J0515', 'color': 'limegreen'},
-        '20140604C080F062502': {'fname': 'rSDSS', 'color': 'r'},
-        '20140609C080F066002': {'fname': 'J0660', 'color': 'magenta'},
-        '20150506C080iSDSS02': {'fname': 'iSDSS', 'color': 'violet'},
-        '20150922C080F086102': {'fname': 'J0861', 'color': 'brown'},
-        '20150504C080zSDSS02': {'fname': 'zSDSS', 'color': 'purple'}}
+        '20150918C080uJAVA02': {'fname': 'uJAVA', 'color': 'navy', 'pos': (3563, -500, -4)},
+        '20150429C080F037802': {'fname': 'J0378', 'color': 'darkviolet', 'pos': (3770, -350, 1)},
+        '20150922C080F039502': {'fname': 'J0395', 'color': 'b', 'pos': (3940, -400, 1)},
+        '20150923C080F041002': {'fname': 'J0410', 'color': 'dodgerblue', 'pos': (4094, -350, -0.1)},
+        '20150514C080F043002': {'fname': 'J0430', 'color': 'c', 'pos': (4292, -400, 1.3)},
+        '20150924C080gSDSS02': {'fname': 'gDSSS', 'color': 'turquoise', 'pos': (4751, -300, 0.)},
+        '20140606C080F051502': {'fname': 'J0515', 'color': 'lime', 'pos': (5133, -100, 1.5)},
+        '20140604C080F062502': {'fname': 'rSDSS', 'color': 'greenyellow', 'pos': (6258, -500, -2)},
+        '20140609C080F066002': {'fname': 'J0660', 'color': 'orange', 'pos': (6614, -300, 1)},
+        '20150506C080iSDSS02': {'fname': 'iSDSS', 'color': 'darkorange', 'pos': (7690, -300, 1)},
+        '20150922C080F086102': {'fname': 'J0861', 'color': 'orangered', 'pos': (8611, -250, 1)},
+        '20150504C080zSDSS02': {'fname': 'zSDSS', 'color': 'r', 'pos': (8831, 300, -12)}}
 
     lab_filters = get_lab_curves(args)
     plot_lab_curves(lab_filters, fnames2filters, 'lab_curves.png', args)
@@ -62,8 +64,7 @@ def main(args):
     allcurves = calc_trasm_curve(lab_filters, fnames2filters, args)
     plot_lab_curves(allcurves, fnames2filters, 'convoluted_curves.png', args)
     plot_all_curves(allcurves, args)
-    # next
-    # make_final_plot(allcurves, args)
+    make_final_plot(allcurves, fnames2filters, args)
     # calculate_central_lambda(allcurves, args)
     return allcurves
 
@@ -86,15 +87,12 @@ def get_lab_curves(args):
                     break
                 n += 1
             f.close()
-        # filter_filename = os.path.join(work_dir, data_dir, filter_file)
         print(n)
         df = pd.read_csv(filter_file, delimiter='\t',
                          decimal=',', skiprows=n, header=None)
-        # print(df.head())
         mid_columns_average = df[df.columns[2:-1]].mean(axis=1)
         transmission_mean = mid_columns_average / df[[1, 102]].mean(axis=1)
         wave = df[0]
-        # print(list(zip((wave, transmission_mean))))
 
         lab_filters[filter_file.split('/')[-1].split('.')[0]] = \
             {'wave': wave, 'transm': transmission_mean}
@@ -231,10 +229,29 @@ def plot_all_curves(allcurves, args):
     plt.show()
 
 
-def make_final_plot(allcurves, args):
+def make_final_plot(allcurves, fnames2filters, args):
     print('Making final plot')
     work_dir = args.work_dir
-    # TODO: make pretty plot for publication
+    fig = plt.figure(figsize=(8, 4))
+    for key in fnames2filters.keys():
+        plt.plot(allcurves[key]['wave'] * 10.,
+                 allcurves[key]['transm'] * 100.,
+                 color=fnames2filters[key]['color'],
+                 label=fnames2filters[key]['fname'], lw=2)
+        plt.text(fnames2filters[key]['pos'][0] + fnames2filters[key]['pos'][1],
+                 max(allcurves[key]['transm'] * 100.) +
+                 fnames2filters[key]['pos'][2],
+                 fnames2filters[key]['fname'], fontsize=12, color=fnames2filters[key]['color'])
+
+    plt.xlabel(r'$\lambda\ \mathrm{[\AA]}$', fontsize=16)
+    plt.ylabel(r'$R_\lambda\ \mathrm{[\%]}$', fontsize=16)
+    plt.xlim(3000, 10000)
+    plt.ylim(0.2, 83)
+    plt.tight_layout()
+
+    plt.savefig(os.path.join(work_dir, 'splus_filters.png'),
+                format='png', dpi=300)
+    plt.show(block=False)
 
 
 def calculate_central_lamda(allcurves, args):
@@ -247,57 +264,3 @@ def calculate_central_lamda(allcurves, args):
 if __name__ == '__main__':
     args = get_args()
     allcurves = main(args)
-
-
-# f = ascii.read(Filter)
-# # f = fits.open(Filter)[1].data
-#
-# wave = f['col0']*10.
-# flux = f['col1']
-# # wave = f.wavelength * 10.
-# # flux = f.transmit
-#
-# halfheight = flux.max() / 2.
-#
-# interp = interp1d(wave, flux)
-# synwave = np.linspace(wave.min(), wave.max(), 100000)
-# syncol = interp(synwave)
-#
-# cont = True
-# inivalue = 0.0001
-# while cont:
-#     mask = (syncol > 0.01) & (syncol > (halfheight - inivalue)
-#                               ) & (syncol < (halfheight + inivalue))
-#     if mask.sum() >= 2:
-#         minlam = synwave[mask][0]
-#         maxlam = synwave[mask][-1]
-#         # if (maxlam - minlam) < 90.:
-#         #    minlam = np.mean(synwave[mask])
-#         #    maxlam = max(synwave)
-#         cont = False
-#     else:
-#         cont = True
-#         inivalue += inivalue
-#
-#
-# diff = maxlam - minlam
-# leff = (maxlam + minlam) / 2.
-#
-# plt.plot(wave, flux, c=color, label='obs')
-# plt.plot([minlam, maxlam], [halfheight, halfheight], c='k',
-#          label=r'$\Delta\lambda = %.0f\mathrm{\AA}$' % diff)
-# plt.scatter(minlam, halfheight, color='k', marker='d',
-#             label=r'$\lambda_0 = %.0f$' % minlam)
-# plt.scatter(maxlam, halfheight, color='k', marker='d',
-#             label=r'$\lambda_1 = %.0f$' % maxlam)
-# plt.scatter(leff, halfheight, marker='o', color='k',
-#             label=r'$\lambda_\mathrm{eff} = %.0f\mathrm{\AA}$' % leff)
-# plt.legend(loc='upper right')
-# plt.grid()
-#
-# if save_fig:
-#     plt.title(sys.argv[3])
-#     print('safing fig', sys.argv[1].split('.')[0] + '.png')
-#     plt.savefig(sys.argv[1].split('.')[0] + '.png', format='png', dpi=100)
-#
-# plt.show()
