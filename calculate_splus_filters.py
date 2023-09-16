@@ -3,7 +3,6 @@
 import numpy as np
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
-import sys
 import os
 import argparse
 import pandas as pd
@@ -58,10 +57,15 @@ def main(args):
         '20150504C080zSDSS02': {'fname': 'zSDSS', 'color': 'purple'}}
 
     lab_filters = get_lab_curves(args)
-    plot_lab_curves(lab_filters, fnames2filters, args)
+    plot_lab_curves(lab_filters, fnames2filters, 'lab_curves.png', args)
 
     allcurves = calc_trasm_curve(lab_filters, fnames2filters, args)
+    plot_lab_curves(allcurves, fnames2filters, 'convoluted_curves.png', args)
     plot_all_curves(allcurves, args)
+    # next
+    # make_final_plot(allcurves, args)
+    # calculate_central_lambda(allcurves, args)
+    return allcurves
 
 
 def get_lab_curves(args):
@@ -98,7 +102,7 @@ def get_lab_curves(args):
     return lab_filters
 
 
-def plot_lab_curves(lab_filters, fnames2filters, args):
+def plot_lab_curves(lab_filters, fnames2filters, outname, args):
     fig = plt.figure(figsize=(10, 10))
     for i, filter_name in enumerate(fnames2filters.keys()):
         ax = fig.add_subplot(4, 3, i+1)
@@ -109,7 +113,7 @@ def plot_lab_curves(lab_filters, fnames2filters, args):
         plt.legend()
 
     if args.save_lab_fig:
-        plt.savefig(os.path.join(args.work_dir, 'lab_filters.png'), dpi=300)
+        plt.savefig(os.path.join(args.work_dir, outname), dpi=300)
     else:
         plt.show()
 
@@ -124,7 +128,8 @@ def calc_trasm_curve(lab_filters, fnames2filters, args):
     atm_wave = atmosph_transmitance['wave']
     atm_transm = atmosph_transmitance['transm']
     atm_ius = interp1d(atm_wave, atm_transm)
-    allcurves['atm'] = {'wave': atm_wave, 'transm': atm_transm}
+    allcurves['atm'] = {'wave': atm_wave, 'transm': atm_transm,
+                        'fname': 'atm', 'color': 'k'}
 
     mirror_reflectance_file = os.path.join(
         work_dir, data_dir, 'mirror_reflectance.fits')
@@ -134,7 +139,8 @@ def calc_trasm_curve(lab_filters, fnames2filters, args):
     # the reflectance bellow was obtained from:
     # https://laserbeamproducts.wordpress.com/2014/06/19/reflectivity-of-aluminium-uv-visible-and-infrared/
     mr_ius = interp1d(mirror_wave, mirror_reflect)
-    allcurves['mirror'] = {'wave': mirror_wave, 'transm': mirror_reflect}
+    allcurves['mirror'] = {'wave': mirror_wave, 'transm': mirror_reflect,
+                           'fname': 'mirror', 'color': 'grey'}
     # measured
     mirror_measured_wave = np.array([300., 350., 420., 470., 530., 650., 880.,
                                      950., 1000., 1100])
@@ -142,7 +148,9 @@ def calc_trasm_curve(lab_filters, fnames2filters, args):
                                      .911, .8725, .7971, .82, .84, .85])
     mr_meas = interp1d(mirror_measured_wave, mirror_measured_flux)
     allcurves['mirror_measured'] = {'wave': mirror_measured_wave,
-                                    'transm': mirror_measured_flux}
+                                    'transm': mirror_measured_flux,
+                                    'fname': 'mirror_measured',
+                                    'color': 'g'}
     mask = (mirror_wave > min(mirror_measured_wave)) & (
         mirror_wave < max(mirror_measured_wave))
     measur_interp = mr_meas(np.array(mirror_wave)[mask])
@@ -152,14 +160,16 @@ def calc_trasm_curve(lab_filters, fnames2filters, args):
     ccd_wave = np.array([float(a) for a in ccd_curve.col1])
     ccd_eff = np.array([float(a) for a in ccd_curve.col2]) / 100.
     ccd_ius = interp1d(np.float_(ccd_wave), np.float_(ccd_eff))
-    allcurves['ccd'] = {'wave': ccd_wave, 'transm': ccd_eff}
+    allcurves['ccd'] = {'wave': ccd_wave, 'transm': ccd_eff,
+                        'fname': 'ccd', 'color': 'b'}
     # measured
     ccd_measured_wave = np.array([300., 350., 400., 450., 500., 550., 600.,
                                   650., 725., 800., 850., 900, 970.])
     ccd_measured_flux = np.array([.2, .45, .90, .93, .88, .88, .91, .92, .95,
                                   .88, .8, .6, .3])
     allcurves['ccd_measured'] = {'wave': ccd_measured_wave,
-                                 'transm': ccd_measured_flux}
+                                 'transm': ccd_measured_flux,
+                                 'fname': 'ccd_measured', 'color': None}
 
     for lab_curve in lab_filters:
         lab_wave = lab_filters[lab_curve]['wave']
@@ -193,18 +203,24 @@ def calc_trasm_curve(lab_filters, fnames2filters, args):
                          label=fnames2filters[lab_curve]['fname'])
                 plt.legend()
                 plt.show()
-        allcurves[fnames2filters[lab_curve]['fname']] = {'wave': wave_range,
-                                                         'transm': new_filter_trans}
+        allcurves[lab_curve] = {'wave': wave_range,
+                                'transm': new_filter_trans,
+                                'fname': fnames2filters[lab_curve]['fname'],
+                                'color': fnames2filters[lab_curve]['color']}
 
     return allcurves
 
 
 def plot_all_curves(allcurves, args):
     work_dir = args.work_dir
+    # import pdb
+    # pdb.set_trace()
     plt.figure(figsize=(10, 6))
-    for curve in allcurves:
-        plt.plot(allcurves[curve]['wave'], allcurves[curve]['transm'],
-                 label=curve)
+    for curve in allcurves.keys():
+        plt.plot(allcurves[curve]['wave'],
+                 allcurves[curve]['transm'],
+                 color=allcurves[curve]['color'],
+                 label=allcurves[curve]['fname'])
     plt.xlim(300, 1100)
     plt.ylim(0, 1)
     plt.xlabel('Wavelength (nm)')
@@ -215,9 +231,22 @@ def plot_all_curves(allcurves, args):
     plt.show()
 
 
+def make_final_plot(allcurves, args):
+    print('Making final plot')
+    work_dir = args.work_dir
+    # TODO: make pretty plot for publication
+
+
+def calculate_central_lamda(allcurves, args):
+    print('Calculating central wavelength')
+    # TODO: calculate central wavelength via trapezoidal rule
+    # TODO: calculate central wavelength via fwhm
+    # TODO: calculate central wavelength via gaussian fit
+
+
 if __name__ == '__main__':
     args = get_args()
-    main(args)
+    allcurves = main(args)
 
 
 # f = ascii.read(Filter)
