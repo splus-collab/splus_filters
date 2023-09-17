@@ -8,15 +8,34 @@ import argparse
 import pandas as pd
 from astropy.io import fits
 import glob
+import colorlog
+import logging
+from scipy.optimize import curve_fit
+
+
+# define logger with different colours for different levels
+def get_logger(name, loglevel='INFO'):
+    logger = logging.getLogger(name)
+    logger.setLevel(loglevel)
+    handler = logging.StreamHandler()
+    handler.setFormatter(colorlog.ColoredFormatter(
+        '%(log_color)s %(levelname)s %(reset)s %(asctime)s - %(message)s',
+        log_colors={
+            'DEBUG': 'cyan',
+            'INFO': 'green',
+            'WARNING': 'yellow',
+            'ERROR': 'red',
+            'CRITICAL': 'white,bg_red',
+        },
+    ))
+    logger.addHandler(handler)
+    return logger
 
 
 def get_args():
     parser = argparse.ArgumentParser(description=" ".join([
         'Calculate the transmission curve or a given filtre.',
         'Estimate the central lambda from the FWHM of that filter.']))
-    # parser.add_argument('--filter_file', type=str,
-    #                     help='File containing the lab measures for the filtre.',
-    #                     required=True)
     parser.add_argument('--color', type=str, help='Matplotlib colour to plot the filter.',
                         default='k')
     parser.add_argument('--name_of_filter', type=str, help='Name of the filter.',
@@ -58,6 +77,8 @@ def main(args):
         '20150922C080F086102': {'fname': 'J0861', 'color': 'orangered', 'pos': (8611, -250, 1)},
         '20150504C080zSDSS02': {'fname': 'zSDSS', 'color': 'r', 'pos': (8831, 300, -12)}}
 
+    logger = get_logger('calculate_splus_filters', loglevel=args.loglevel)
+    logger.info('Calculating the lab transmission curves of the filters.')
     lab_filters = get_lab_curves(args)
     plot_lab_curves(lab_filters, fnames2filters, 'lab_curves.png', args)
 
@@ -65,7 +86,7 @@ def main(args):
     plot_lab_curves(allcurves, fnames2filters, 'convoluted_curves.png', args)
     plot_all_curves(allcurves, args)
     make_final_plot(allcurves, fnames2filters, args)
-    # calculate_central_lambda(allcurves, args)
+    calculate_central_lambda(allcurves, fnames2filters, args)
     return allcurves
 
 
@@ -140,18 +161,18 @@ def calc_trasm_curve(lab_filters, fnames2filters, args):
     allcurves['mirror'] = {'wave': mirror_wave, 'transm': mirror_reflect,
                            'fname': 'mirror', 'color': 'grey'}
     # measured
-    mirror_measured_wave = np.array([300., 350., 420., 470., 530., 650., 880.,
-                                     950., 1000., 1100])
-    mirror_measured_flux = np.array([.9126, .9126, .9126, .9126,
-                                     .911, .8725, .7971, .82, .84, .85])
-    mr_meas = interp1d(mirror_measured_wave, mirror_measured_flux)
-    allcurves['mirror_measured'] = {'wave': mirror_measured_wave,
-                                    'transm': mirror_measured_flux,
-                                    'fname': 'mirror_measured',
-                                    'color': 'g'}
-    mask = (mirror_wave > min(mirror_measured_wave)) & (
-        mirror_wave < max(mirror_measured_wave))
-    measur_interp = mr_meas(np.array(mirror_wave)[mask])
+    # mirror_measured_wave = np.array([300., 350., 420., 470., 530., 650., 880.,
+    #                                  950., 1000., 1100])
+    # mirror_measured_flux = np.array([.9126, .9126, .9126, .9126,
+    #                                  .911, .8725, .7971, .82, .84, .85])
+    # mr_meas = interp1d(mirror_measured_wave, mirror_measured_flux)
+    # allcurves['mirror_measured'] = {'wave': mirror_measured_wave,
+    #                                 'transm': mirror_measured_flux,
+    #                                 'fname': 'mirror_measured',
+    #                                 'color': 'g'}
+    # mask = (mirror_wave > min(mirror_measured_wave)) & (
+    #     mirror_wave < max(mirror_measured_wave))
+    # measur_interp = mr_meas(np.array(mirror_wave)[mask])
 
     ccd_efficiency_file = os.path.join(work_dir, data_dir, 'ccd_curve.fits')
     ccd_curve = fits.open(ccd_efficiency_file)[1].data
@@ -160,7 +181,7 @@ def calc_trasm_curve(lab_filters, fnames2filters, args):
     ccd_ius = interp1d(np.float_(ccd_wave), np.float_(ccd_eff))
     allcurves['ccd'] = {'wave': ccd_wave, 'transm': ccd_eff,
                         'fname': 'ccd', 'color': 'b'}
-    # measured
+    # measured CCD efficiency on Tololo
     ccd_measured_wave = np.array([300., 350., 400., 450., 500., 550., 600.,
                                   650., 725., 800., 850., 900, 970.])
     ccd_measured_flux = np.array([.2, .45, .90, .93, .88, .88, .91, .92, .95,
@@ -175,9 +196,9 @@ def calc_trasm_curve(lab_filters, fnames2filters, args):
         lab_ius = interp1d(lab_wave, lab_transm)
         xmin = np.array([min(atm_wave / 10.), min(mirror_wave),
                          min(ccd_wave), min(lab_wave)])
-        xmax = np.array([max(atm_wave / 10.), max(mirror_wave),
-                         max(ccd_wave), max(lab_wave),
-                         max(lab_filters['20150504C080zSDSS02']['wave'])])
+        # xmax = np.array([max(atm_wave / 10.), max(mirror_wave),
+        #                  max(ccd_wave), max(lab_wave),
+        #                  max(lab_filters['20150504C080zSDSS02']['wave'])])
         wave_range = np.arange(max(xmin), max(lab_wave), 1.)
         new_transm = lab_ius(wave_range)
         new_atm_transm = atm_ius(wave_range)
@@ -211,8 +232,6 @@ def calc_trasm_curve(lab_filters, fnames2filters, args):
 
 def plot_all_curves(allcurves, args):
     work_dir = args.work_dir
-    # import pdb
-    # pdb.set_trace()
     plt.figure(figsize=(10, 6))
     for curve in allcurves.keys():
         plt.plot(allcurves[curve]['wave'],
@@ -232,7 +251,7 @@ def plot_all_curves(allcurves, args):
 def make_final_plot(allcurves, fnames2filters, args):
     print('Making final plot')
     work_dir = args.work_dir
-    fig = plt.figure(figsize=(8, 4))
+    plt.figure(figsize=(8, 4))
     for key in fnames2filters.keys():
         plt.plot(allcurves[key]['wave'] * 10.,
                  allcurves[key]['transm'] * 100.,
@@ -254,13 +273,35 @@ def make_final_plot(allcurves, fnames2filters, args):
     plt.show(block=False)
 
 
-def calculate_central_lamda(allcurves, args):
-    print('Calculating central wavelength')
-    # TODO: calculate central wavelength via trapezoidal rule
-    # TODO: calculate central wavelength via fwhm
-    # TODO: calculate central wavelength via gaussian fit
+def calculate_central_lambda(allcurves, fnames2filters, args):
+    logger = get_logger(__name__, loglevel=args.loglevel)
+    logger.info('Calculating central wavelength')
+    logger.info('Claculating curves via trapezoidal rule approach')
+    print('Filter, central wavelength, FWHM')
+    for curve in fnames2filters.keys():
+        wave = allcurves[curve]['wave'] * 10.
+        transm = allcurves[curve]['transm']
+        interp = interp1d(wave, transm)
+        synt_wave = np.linspace(min(wave), max(wave), 1000000)
+        synt_transm = interp(synt_wave)
+        half_height = max(synt_transm) / 2.
+        left_index = np.where(synt_transm > half_height)[0][0]
+        right_index = np.where(synt_transm > half_height)[0][-1]
+        min_wave = synt_wave[left_index]
+        max_wave = synt_wave[right_index]
+        central_wave = (max_wave + min_wave) / 2.
+        print('Trapz: %s %.0f %.0f' % (fnames2filters[curve]['fname'],
+              central_wave, max_wave - min_wave))
+
+        norm_transm = synt_transm / max(synt_transm)
+        left_idx = np.where(norm_transm > 0.5)[0][0]
+        right_idx = np.where(norm_transm > 0.5)[0][-1]
+        mid_wave = (synt_wave[right_idx] + synt_wave[left_idx]) / 2.
+        delta_wave = synt_wave[right_idx] - synt_wave[left_idx]
+        print('Norm: %s %.0f %.0f' % (fnames2filters[curve]['fname'],
+              mid_wave, delta_wave))
 
 
 if __name__ == '__main__':
     args = get_args()
-    allcurves = main(args)
+    main(args)
