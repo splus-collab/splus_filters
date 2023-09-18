@@ -19,13 +19,14 @@ def get_logger(name, loglevel='INFO'):
     logger.setLevel(loglevel)
     handler = logging.StreamHandler()
     handler.setFormatter(colorlog.ColoredFormatter(
-        '%(log_color)s %(levelname)s %(reset)s %(asctime)s - %(message)s',
+        "%(asctime)s [%(log_color)s%(levelname)s%(reset)s] @%(module)s.%(funcName)s() %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
         log_colors={
             'DEBUG': 'cyan',
             'INFO': 'green',
             'WARNING': 'yellow',
             'ERROR': 'red',
-            'CRITICAL': 'white,bg_red',
+            'CRITICAL': 'bold_yellow,bg_red',
         },
     ))
     logger.addHandler(handler)
@@ -48,6 +49,8 @@ def get_args():
                         help='Save the transmission curve of the filter.')
     parser.add_argument('--show_individual_filters', action='store_true',
                         help='Show the individual filters. Only activate when --save_csv_filters is used.')
+    parser.add_argument('--show_plots', action='store_true',
+                        help='Show the main plots.')
     parser.add_argument('--save_lab_fig', action='store_true',
                         help='Save the plot of the lab filters.')
     parser.add_argument('--loglevel', type=str, help='Log level.',
@@ -133,8 +136,9 @@ def plot_lab_curves(lab_filters, fnames2filters, outname, args):
 
     if args.save_lab_fig:
         plt.savefig(os.path.join(args.work_dir, outname), dpi=300)
-    else:
+    if args.show_plots:
         plt.show()
+    plt.close()
 
 
 def calc_trasm_curve(lab_filters, fnames2filters, args):
@@ -222,6 +226,8 @@ def calc_trasm_curve(lab_filters, fnames2filters, args):
                          label=fnames2filters[lab_curve]['fname'])
                 plt.legend()
                 plt.show()
+            else:
+                plt.close()
         allcurves[lab_curve] = {'wave': wave_range,
                                 'transm': new_filter_trans,
                                 'fname': fnames2filters[lab_curve]['fname'],
@@ -245,7 +251,10 @@ def plot_all_curves(allcurves, args):
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.tight_layout()
     plt.savefig(os.path.join(work_dir, 'allcurves.png'), dpi=300)
-    plt.show()
+    if args.show_plots:
+        plt.show()
+    else:
+        plt.close()
 
 
 def make_final_plot(allcurves, fnames2filters, args):
@@ -270,7 +279,10 @@ def make_final_plot(allcurves, fnames2filters, args):
 
     plt.savefig(os.path.join(work_dir, 'splus_filters.png'),
                 format='png', dpi=300)
-    plt.show(block=False)
+    if args.show_plots:
+        plt.show(block=False)
+    else:
+        plt.close()
 
 
 def calculate_central_lambda(allcurves, fnames2filters, args):
@@ -278,6 +290,27 @@ def calculate_central_lambda(allcurves, fnames2filters, args):
     logger.info('Calculating central wavelength')
     logger.info('Claculating curves via trapezoidal rule approach')
     print('Filter, central wavelength, FWHM')
+
+    htmlf = open(os.path.join(args.work_dir, 'central_wavelengths.html'), 'w')
+    htmlf.write('<div class="dlpage">\n')
+    htmlf.write('<table class="docutils" style="width:100%" border=1>\n')
+    htmlf.write('<colgroup>\n')
+    htmlf.write('<tr>')
+    htmlf.write('<th colspan="4"><b>S-PLUS filters summary</b></th>\n')
+    htmlf.write('</tr>\n')
+    htmlf.write('<tr>')
+    htmlf.write('<td>Filter</td>\n')
+    htmlf.write('<td><sub>λ</sub><sub>trapz</sub></td>\n')
+    htmlf.write('<td><sub>Δλ</sub><sub>trapz</sub></td>\n')
+    htmlf.write('<td><sub>λ</sub><sub>norm</sub></td>\n')
+    htmlf.write('<td><sub>Δλ</sub><sub>norm</sub></td>\n')
+    htmlf.write('<td><sub>λ</sub><sub>mean</sub></td>\n')
+    htmlf.write('<td><sub>Δλ</sub><sub>mean</sub></td>\n')
+    htmlf.write('<td><sub>λ</sub><sub>eff</sub></td>\n')
+    htmlf.write('<td><sub>Δλ</sub><sub>eff</sub></td>\n')
+    htmlf.write('</tr>\n')
+    htmlf.write('</colgroup>\n')
+
     for curve in fnames2filters.keys():
         wave = allcurves[curve]['wave'] * 10.
         transm = allcurves[curve]['transm']
@@ -300,6 +333,33 @@ def calculate_central_lambda(allcurves, fnames2filters, args):
         delta_wave = synt_wave[right_idx] - synt_wave[left_idx]
         print('Norm: %s %.0f %.0f' % (fnames2filters[curve]['fname'],
               mid_wave, delta_wave))
+        # calculate lambda_mea
+        lambda_mean = np.sum(wave * transm) / np.sum(transm)
+        width_mean = 2 * np.sqrt(np.sum((wave - lambda_mean)**2 * transm) /
+                                 np.sum(transm))
+        print('Mean: %s %.0f Wmean: %.0f' % (fnames2filters[curve]['fname'],
+                                             lambda_mean, width_mean))
+        # calculate lambda_eff
+        lambda_eff = np.sqrt(sum(wave**2 * transm) / sum(transm**2))
+        effective_width = 2 * np.sqrt(sum((wave - lambda_eff)**2 * transm) /
+                                      sum(transm))
+        print('Eff: %s %.0f Weff: %.0f' % (fnames2filters[curve]['fname'],
+                                           lambda_eff, effective_width))
+        logger.info('Writing central wavelengths to html file')
+        htmlf.write('<tr>\n')
+        htmlf.write('<td>%s</td>\n' % fnames2filters[curve]['fname'])
+        htmlf.write('<td>%.0f</td>\n' % central_wave)
+        htmlf.write('<td>%.0f</td>\n' % (max_wave - min_wave))
+        htmlf.write('<td>%.0f</td>\n' % mid_wave)
+        htmlf.write('<td>%.0f</td>\n' % delta_wave)
+        htmlf.write('<td>%.0f</td>\n' % lambda_mean)
+        htmlf.write('<td>%.0f</td>\n' % width_mean)
+        htmlf.write('<td>%.0f</td>\n' % lambda_eff)
+        htmlf.write('<td>%.0f</td>\n' % effective_width)
+        htmlf.write('</tr>\n')
+    htmlf.write('</table>\n')
+    htmlf.write('</div>\n')
+    htmlf.close()
 
 
 if __name__ == '__main__':
