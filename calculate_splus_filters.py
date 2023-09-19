@@ -38,7 +38,7 @@ def get_args():
         'Estimate the central lambda from the FWHM of that filter.']))
     parser.add_argument('--work_dir', type=str, help='Working directory.',
                         default=os.getcwd())
-    parser.add_argument('--save_fig', action='store_true',
+    parser.add_argument('--save_plots', action='store_true',
                         help='Save the plot of the filter.')
     parser.add_argument('--save_csv_filters', action='store_true',
                         help='Save the transmission curve of the filter.')
@@ -48,7 +48,7 @@ def get_args():
                         help='Show the main plots.')
     parser.add_argument('--loglevel', type=str, help='Log level.',
                         default='INFO')
-    parser.add_argument('--debig', action='store_true',
+    parser.add_argument('--debug', action='store_true',
                         help='Activate debug mode.')
 
     args = parser.parse_args()
@@ -75,15 +75,16 @@ def main(args):
     logger.info('Calculating the lab transmission curves of the filters.')
     lab_filters = get_lab_curves(args)
     plot_lab_curves(lab_filters, fnames2filters, args,
-                    output='lab_curves.png', figlevel='lab')
+                    outname='lab_curves.png', figlevel='lab')
 
     allcurves = calc_trasm_curve(lab_filters, fnames2filters, args)
-    plot_lab_curves(allcurves, fnames2filters, 'convoluted_curves.png', args)
+    plot_lab_curves(allcurves, fnames2filters, args,
+                    outname='convoluted_curves.png', figlevel='convoluted')
     plot_all_curves(allcurves, args)
     make_final_plot(allcurves, fnames2filters, args)
     allcurves = calculate_central_lambda(allcurves, fnames2filters, args)
-    plot_lab_curves(allcurves, fnames2filters,
-                    'convoluted_curves_centralambda.png', args)
+    plot_lab_curves(allcurves, fnames2filters, args,
+                    outname='convoluted_curves_centralambda.png', figlevel='centralambda')
     make_html(allcurves, fnames2filters, args)
     return allcurves
 
@@ -153,6 +154,8 @@ def plot_lab_curves(lab_filters, fnames2filters, args, outname='fig.png', figlev
                 color=fnames2filters[filter_name]['color'])
         if figlevel == 'lab':
             logger.info('Plotting lab curve %s' % filter_name)
+        elif figlevel == 'convoluted':
+            logger.info('Plotting convoluted curve %s' % filter_name)
         elif figlevel == 'trapz':
             central_wave = lab_filters[filter_name]['trapz']['central_wave']
             min_wave = lab_filters[filter_name]['trapz']['central_wave'] - \
@@ -177,7 +180,7 @@ def plot_lab_curves(lab_filters, fnames2filters, args, outname='fig.png', figlev
             logger.error('Not implemented yet.')
         plt.legend()
 
-    if args.save_lab_fig:
+    if args.save_plots:
         logger.info('Saving fig to %s' % os.path.join(args.work_dir, outname))
         plt.savefig(os.path.join(args.work_dir, outname), dpi=300)
     if args.show_plots:
@@ -309,9 +312,11 @@ def plot_all_curves(allcurves, args):
     plt.ylabel('Transmittance')
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.tight_layout()
-    plt.savefig(os.path.join(work_dir, 'allcurves.png'), dpi=300)
+    if args.save_plots:
+        plt.savefig(os.path.join(work_dir, 'allcurves.png'), dpi=300)
     if args.show_plots:
         plt.show()
+        plt.close()
     else:
         plt.close()
 
@@ -336,10 +341,12 @@ def make_final_plot(allcurves, fnames2filters, args):
     plt.ylim(0.2, 83)
     plt.tight_layout()
 
-    plt.savefig(os.path.join(work_dir, 'splus_filters.png'),
-                format='png', dpi=300)
+    if args.save_plots:
+        plt.savefig(os.path.join(work_dir, 'splus_filters.png'),
+                    format='png', dpi=300)
     if args.show_plots:
-        plt.show(block=False)
+        plt.show()
+        plt.close()
     else:
         plt.close()
 
@@ -394,7 +401,7 @@ def make_html(allcurves, fnames2filters, args):
     htmlf.write('<table class="docutils" style="width:100%" border=1>\n')
     htmlf.write('<colgroup>\n')
     htmlf.write('<tr>')
-    htmlf.write('<th colspan="4"><b>S-PLUS filters summary</b></th>\n')
+    htmlf.write('<th colspan="7"><b>S-PLUS filters summary</b></th>\n')
     htmlf.write('</tr>\n')
     htmlf.write('<tr>')
     htmlf.write('<td>Filter</td>\n')
@@ -404,8 +411,6 @@ def make_html(allcurves, fnames2filters, args):
     htmlf.write('<td><sub>W</sub><sub>eq</sub></td>\n')
     htmlf.write('<td><sub>λ</sub><sub>mean</sub></td>\n')
     htmlf.write('<td><sub>Δλ</sub><sub>mean</sub></td>\n')
-    htmlf.write('<td><sub>λ</sub><sub>eff</sub></td>\n')
-    htmlf.write('<td><sub>Δλ</sub><sub>eff</sub></td>\n')
     htmlf.write('</tr>\n')
     htmlf.write('</colgroup>\n')
     for curve in fnames2filters.keys():
@@ -422,8 +427,6 @@ def make_html(allcurves, fnames2filters, args):
         htmlf.write('<td>%.0f</td>\n' %
                     allcurves[curve]['mean']['central_wave'])
         htmlf.write('<td>%.0f</td>\n' % allcurves[curve]['mean']['delta_wave'])
-        # htmlf.write('<td>%.0f</td>\n' % lambda_eff)
-        # htmlf.write('<td>%.0f</td>\n' % effective_width)
         htmlf.write('</tr>\n')
     htmlf.write('</table>\n')
     htmlf.write('</div>\n')
