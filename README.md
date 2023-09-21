@@ -1,4 +1,3 @@
-```markdown
 # S-PLUS Filters Transmission Curve Calculator
 
 ![License](https://img.shields.io/badge/license-GNUv3.0-green)
