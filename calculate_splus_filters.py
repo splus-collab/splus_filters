@@ -42,6 +42,8 @@ def get_args():
                         help='Save the plot of the filter.')
     parser.add_argument('--save_csv_filters', action='store_true',
                         help='Save the transmission curve of the filter.')
+    parser.add_argument('--save_central_wavelentghs', action='store_true',
+                        help='Save the central wavelengths of the filters in a csv file.')
     parser.add_argument('--show_individual_filters', action='store_true',
                         help='Show the individual filters. Only activate when --save_csv_filters is used.')
     parser.add_argument('--show_plots', action='store_true',
@@ -84,8 +86,16 @@ def main(args):
     make_final_plot(allcurves, fnames2filters, args)
     allcurves = calculate_central_lambda(allcurves, fnames2filters, args)
     plot_lab_curves(allcurves, fnames2filters, args,
-                    outname='convoluted_curves_centralambda.png', figlevel='centralambda')
+                    outname='convoluted_curves_central.png', figlevel='central')
+    plot_lab_curves(allcurves, fnames2filters, args,
+                    outname='convoluted_curves_trapz.png', figlevel='trapz')
+    plot_lab_curves(allcurves, fnames2filters, args,
+                    outname='convoluted_curves_mean.png', figlevel='mean')
+    plot_lab_curves(allcurves, fnames2filters, args,
+                    outname='convoluted_curves_mean_1.png', figlevel='mean_1')
     make_html(allcurves, fnames2filters, args)
+    if args.save_central_wavelentghs:
+        make_csv_of_central_lambdas(allcurves, fnames2filters, args)
     return allcurves
 
 
@@ -149,36 +159,83 @@ def plot_lab_curves(lab_filters, fnames2filters, args, outname='fig.png', figlev
         ax = fig.add_subplot(4, 3, i+1)
         w = lab_filters[filter_name]['wave'] * 10.
         t = lab_filters[filter_name]['transm']
+        if t.max() > 1.:
+            t = t / 100.
         logger.debug('Plotting filter: %s' % filter_name)
         ax.plot(w, t, lw=1.5, label=fnames2filters[filter_name]['fname'],
                 color=fnames2filters[filter_name]['color'])
         if figlevel == 'lab':
+            title = 'Lab transmission curves'
             logger.info('Plotting lab curve %s' % filter_name)
         elif figlevel == 'convoluted':
+            title = 'Convoluted transmission curves'
             logger.info('Plotting convoluted curve %s' % filter_name)
+        elif figlevel == 'central':
+            title = 'Central wavelength'
+            logger.debug('Plotting central wavelength %s' % filter_name)
+            central_wave = lab_filters[filter_name]['central']['central_wave']
+            min_wave = lab_filters[filter_name]['central']['central_wave'] - \
+                lab_filters[filter_name]['central']['delta_wave'] / 2.
+            max_wave = lab_filters[filter_name]['central']['central_wave'] + \
+                lab_filters[filter_name]['central']['delta_wave'] / 2.
+            half_height = lab_filters[filter_name]['transm'].max() / 2.
+            ax.plot([min_wave, max_wave], [half_height, half_height],
+                    'k-', marker='p', lw=1.5)
+            ax.plot([central_wave], [half_height], 'kx', ms=10)
+            ax.plot([min_wave, min_wave], [0., half_height], 'k-', lw=1.5)
+            ax.plot([max_wave, max_wave], [0., half_height], 'k-', lw=1.5)
+            ax.plot([central_wave, central_wave], [
+                    0., half_height * 2.], 'k-', lw=1.5)
         elif figlevel == 'trapz':
+            title = 'Method: Trapezoidal rule'
+            logger.debug('Plotting trapezoidal rule for %s' % filter_name)
             central_wave = lab_filters[filter_name]['trapz']['central_wave']
             min_wave = lab_filters[filter_name]['trapz']['central_wave'] - \
                 lab_filters[filter_name]['trapz']['delta_wave'] / 2.
             max_wave = lab_filters[filter_name]['trapz']['central_wave'] + \
                 lab_filters[filter_name]['trapz']['delta_wave'] / 2.
-            half_height = lab_filters[filter_name]['transm'].max() / 2.
-            logger.debug('Plotting min and max wavelengths: %f, %f' %
-                         (min_wave, max_wave))
-            ax.plot([min_wave, max_wave], [half_height, half_height],
-                    'k-', marker='p', lw=1.5)
-            logger.debug('Plotting central wavelength: %f' % central_wave)
-            ax.plot([central_wave], [half_height],
-                    marker='o', color='c', lw=1.5)
-            logger.debug('Plotting vertical lines.')
-            ax.plot([min_wave, min_wave], [0, half_height], 'k--', lw=1.)
-            ax.plot([max_wave, max_wave], [0, half_height], 'k--', lw=1.)
+            height = lab_filters[filter_name]['transm'].max()
+            ax.fill_between([min_wave, max_wave], [height, height], color='brown',
+                            alpha=0.7)
             ax.plot([central_wave, central_wave],
-                    [0, lab_filters[filter_name]['transm'].max()],
-                    'k--', lw=1.)
-        elif figlevel == 'eq_width':
-            logger.error('Not implemented yet.')
+                    [0, height], 'k--', lw=1.5)
+        elif figlevel == 'mean':
+            title = 'Method: Mean'
+            centr_wave = lab_filters[filter_name]['mean']['central_wave']
+            min_wave = lab_filters[filter_name]['mean']['central_wave'] - \
+                lab_filters[filter_name]['mean']['delta_wave'] / 2.
+            max_wave = lab_filters[filter_name]['mean']['central_wave'] + \
+                lab_filters[filter_name]['mean']['delta_wave'] / 2.
+            print(min_wave, max_wave,
+                  lab_filters[filter_name]['mean']['delta_wave'])
+            ax.fill_between([min_wave, max_wave], 0, t.max(), color='brown',
+                            alpha=0.7)
+            ax.plot([centr_wave, centr_wave], [
+                    0, t.max()], '--', color='k', lw=1.5)
+        elif figlevel == 'mean_1':
+            title = 'Method: Mean with 1\% threshold'
+            centr_wave = lab_filters[filter_name]['mean_1']['central_wave']
+            min_wave = lab_filters[filter_name]['mean_1']['central_wave'] - \
+                lab_filters[filter_name]['mean_1']['delta_wave'] / 2.
+            max_wave = lab_filters[filter_name]['mean_1']['central_wave'] + \
+                lab_filters[filter_name]['mean_1']['delta_wave'] / 2.
+            ax.fill_between([min_wave, max_wave], 0, t.max(), color='brown',
+                            alpha=0.7)
+            ax.plot([centr_wave, centr_wave], [
+                    0, t.max()], '--', color='k', lw=1.5)
+        else:
+            logger.critical('Unknown figlevel: %s' % figlevel)
+            raise ValueError('Unknown figlevel: %s' % figlevel)
         plt.legend()
+        ax.set_ylim(0, 1.)
+        if i == 1:
+            ax.set_title(title)
+        if i == 10:
+            ax.set_xlabel('Wavelength [A]')
+        if i == 3:
+            ax.set_ylabel('Transmission')
+        plt.grid()
+    plt.tight_layout()
 
     if args.save_plots:
         logger.info('Saving fig to %s' % os.path.join(args.work_dir, outname))
@@ -284,6 +341,7 @@ def calc_trasm_curve(lab_filters, fnames2filters, args):
             np.savetxt(outputname, np.transpose(dat), delimiter=',',
                        header='wavelength,transmittance')
             if args.show_individual_filters:
+                logger.info('Plotting filter: %s.', lab_curve)
                 plt.plot(wave_range, new_filter_trans, fnames2filters[lab_curve]['color'],
                          label=fnames2filters[lab_curve]['fname'])
                 plt.legend()
@@ -299,6 +357,7 @@ def calc_trasm_curve(lab_filters, fnames2filters, args):
 
 
 def plot_all_curves(allcurves, args):
+    logger = get_logger(__name__, loglevel=args.loglevel)
     work_dir = args.work_dir
     plt.figure(figsize=(10, 6))
     for curve in allcurves.keys():
@@ -311,8 +370,10 @@ def plot_all_curves(allcurves, args):
     plt.xlabel('Wavelength (nm)')
     plt.ylabel('Transmittance')
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plt.grid()
     plt.tight_layout()
     if args.save_plots:
+        logger.debug('Saving plot to file.')
         plt.savefig(os.path.join(work_dir, 'allcurves.png'), dpi=300)
     if args.show_plots:
         plt.show()
@@ -322,7 +383,8 @@ def plot_all_curves(allcurves, args):
 
 
 def make_final_plot(allcurves, fnames2filters, args):
-    print('Making final plot')
+    logger = get_logger(__name__, loglevel=args.loglevel)
+    logger.info('Making presentation plot.')
     work_dir = args.work_dir
     plt.figure(figsize=(8, 4))
     for key in fnames2filters.keys():
@@ -342,9 +404,12 @@ def make_final_plot(allcurves, fnames2filters, args):
     plt.tight_layout()
 
     if args.save_plots:
+        logger.info('Saving plot to %s.', os.path.join(
+            work_dir, 'splus_filters.png'))
         plt.savefig(os.path.join(work_dir, 'splus_filters.png'),
                     format='png', dpi=300)
     if args.show_plots:
+        logger.debug('Showing plot.')
         plt.show()
         plt.close()
     else:
@@ -354,8 +419,6 @@ def make_final_plot(allcurves, fnames2filters, args):
 def calculate_central_lambda(allcurves, fnames2filters, args):
     logger = get_logger(__name__, loglevel=args.loglevel)
     logger.info('Calculating central wavelength')
-    logger.info('Claculating curves via trapezoidal rule approach')
-    print('Filter, central wavelength, FWHM')
 
     for curve in fnames2filters.keys():
         wave = allcurves[curve]['wave'] * 10.
@@ -363,33 +426,40 @@ def calculate_central_lambda(allcurves, fnames2filters, args):
         interp = interp1d(wave, transm)
         synt_wave = np.linspace(min(wave), max(wave), 100000)
         synt_transm = interp(synt_wave)
+        logger.debug('Claculating curves via trapezoidal rule approach')
         half_height = max(synt_transm) / 2.
         left_index = np.where(synt_transm > half_height)[0][0]
         right_index = np.where(synt_transm > half_height)[0][-1]
         min_wave = synt_wave[left_index]
         max_wave = synt_wave[right_index]
         central_wave = (max_wave + min_wave) / 2.
-        allcurves[curve]['trapz'] = {'central_wave': central_wave,
-                                     'delta_wave': max_wave - min_wave}
-        print('Trapz: %s %.0f %.0f' % (fnames2filters[curve]['fname'],
-              central_wave, max_wave - min_wave))
+        allcurves[curve]['central'] = {'central_wave': central_wave,
+                                       'delta_wave': max_wave - min_wave}
 
-        norm_transm = synt_transm / max(synt_transm)
-        left_idx = np.where(norm_transm > 0.5)[0][0]
-        right_idx = np.where(norm_transm > 0.5)[0][-1]
-        mid_wave = (synt_wave[right_idx] + synt_wave[left_idx]) / 2.
-        delta_wave = synt_wave[right_idx] - synt_wave[left_idx]
-        equi_width = np.trapz(synt_transm, synt_wave) / max(synt_transm)
-        allcurves[curve]['norm'] = {'central_wave': mid_wave,
-                                    'delta_wave': equi_width}
-        print('Norm: %s %.0f %.0f' % (fnames2filters[curve]['fname'],
-              mid_wave, delta_wave))
-        lambda_mean = np.sum(wave * transm) / np.sum(transm)
-        std_mean = np.sqrt(np.sum((wave - lambda_mean)**2) / wave.size)
+        logger.debug('Calculating trapezoidal rule')
+        mid_wave = np.trapz(synt_wave * synt_transm, synt_wave) / np.trapz(
+            synt_transm, synt_wave)
+        trapz_width = np.trapz(synt_transm, synt_wave) / max(synt_transm)
+        allcurves[curve]['trapz'] = {'central_wave': mid_wave,
+                                     'delta_wave': trapz_width}
+
+        logger.debug('Calculating mean with 0% threshold')
+        mask = synt_transm > synt_transm.max() * 0.0
+        lambda_mean = np.sum(
+            synt_wave[mask] * synt_transm[mask]) / np.sum(synt_transm[mask])
+        mean_width = np.trapz(synt_transm[mask], synt_wave[mask]) / max(
+            synt_transm[mask])
         allcurves[curve]['mean'] = {'central_wave': lambda_mean,
-                                    'delta_wave': std_mean}
-        print('Mean: %s %.0f Wmean: %.0f' % (fnames2filters[curve]['fname'],
-                                             lambda_mean, std_mean))
+                                    'delta_wave': mean_width}
+
+        logger.debug('Calculating mean with 1% threshold')
+        mask = synt_transm > synt_transm.max() * 0.01
+        lambda_mean = np.sum(synt_wave[mask] * synt_transm[mask]) / np.sum(
+            synt_transm[mask])
+        mean_width = np.trapz(synt_transm[mask], synt_wave[mask]) / max(
+            synt_transm[mask])
+        allcurves[curve]['mean_1'] = {'central_wave': lambda_mean,
+                                      'delta_wave': mean_width}
 
     return allcurves
 
@@ -401,36 +471,81 @@ def make_html(allcurves, fnames2filters, args):
     htmlf.write('<table class="docutils" style="width:100%" border=1>\n')
     htmlf.write('<colgroup>\n')
     htmlf.write('<tr>')
-    htmlf.write('<th colspan="7"><b>S-PLUS filters summary</b></th>\n')
+    htmlf.write('<th colspan="9"><b>S-PLUS filters summary</b></th>\n')
     htmlf.write('</tr>\n')
     htmlf.write('<tr>')
     htmlf.write('<td>Filter</td>\n')
-    htmlf.write('<td><sub>λ</sub><sub>trapz</sub></td>\n')
-    htmlf.write('<td><sub>Δλ</sub><sub>trapz</sub></td>\n')
-    htmlf.write('<td><sub>λ</sub><sub>norm</sub></td>\n')
-    htmlf.write('<td><sub>W</sub><sub>eq</sub></td>\n')
-    htmlf.write('<td><sub>λ</sub><sub>mean</sub></td>\n')
-    htmlf.write('<td><sub>Δλ</sub><sub>mean</sub></td>\n')
+    htmlf.write('<td>λ<sub>central</sub></td>\n')
+    htmlf.write('<td>FWHM</td>\n')
+    htmlf.write('<td>λ<sub>trapz</sub></td>\n')
+    htmlf.write('<td>W<sub>trapz</sub></td>\n')
+    htmlf.write('<td>λ<sub>mean</sub></td>\n')
+    htmlf.write('<td>Δλ<sub>mean</sub></td>\n')
+    htmlf.write('<td>λ<sub>mean</sub> (>1%)</td>\n')
+    htmlf.write('<td>W<sub>mean</sub> (>1%)</td>\n')
     htmlf.write('</tr>\n')
     htmlf.write('</colgroup>\n')
+    logger.info('Writing central wavelengths to html file')
     for curve in fnames2filters.keys():
-        logger.info('Writing central wavelengths to html file')
         htmlf.write('<tr>\n')
         htmlf.write('<td>%s</td>\n' % fnames2filters[curve]['fname'])
+        htmlf.write('<td>%.0f</td>\n' %
+                    allcurves[curve]['central']['central_wave'])
+        htmlf.write('<td>%.0f</td>\n' %
+                    allcurves[curve]['central']['delta_wave'])
         htmlf.write('<td>%.0f</td>\n' %
                     allcurves[curve]['trapz']['central_wave'])
         htmlf.write('<td>%.0f</td>\n' %
                     allcurves[curve]['trapz']['delta_wave'])
         htmlf.write('<td>%.0f</td>\n' %
-                    allcurves[curve]['norm']['central_wave'])
-        htmlf.write('<td>%.0f</td>\n' % allcurves[curve]['norm']['delta_wave'])
-        htmlf.write('<td>%.0f</td>\n' %
                     allcurves[curve]['mean']['central_wave'])
         htmlf.write('<td>%.0f</td>\n' % allcurves[curve]['mean']['delta_wave'])
+        htmlf.write('<td>%.0f</td>\n' %
+                    allcurves[curve]['mean_1']['central_wave'])
+        htmlf.write('<td>%.0f</td>\n' %
+                    allcurves[curve]['mean_1']['delta_wave'])
         htmlf.write('</tr>\n')
     htmlf.write('</table>\n')
     htmlf.write('</div>\n')
     htmlf.close()
+
+
+def make_csv_of_central_lambdas(allcurves, fnames2filters, args):
+    logger = get_logger(__name__, loglevel=args.loglevel)
+    workdir = args.work_dir
+    logger.info('Writing central wavelengths to csv file')
+    filters = []
+    central_wave = []
+    delta_wave = []
+    trapz_wave = []
+    trapz_width = []
+    mean_wave = []
+    mean_width = []
+    mean_1_wave = []
+    mean_1_width = []
+    for curve in fnames2filters.keys():
+        logger.debug('Getting params for %s' % fnames2filters[curve]['fname'])
+        filters.append(fnames2filters[curve]['fname'])
+        central_wave.append(allcurves[curve]['central']['central_wave'])
+        delta_wave.append(allcurves[curve]['central']['delta_wave'])
+        trapz_wave.append(allcurves[curve]['trapz']['central_wave'])
+        trapz_width.append(allcurves[curve]['trapz']['delta_wave'])
+        mean_wave.append(allcurves[curve]['mean']['central_wave'])
+        mean_width.append(allcurves[curve]['mean']['delta_wave'])
+        mean_1_wave.append(allcurves[curve]['mean_1']['central_wave'])
+        mean_1_width.append(allcurves[curve]['mean_1']['delta_wave'])
+    data = {'filter': filters,
+            'central_wave': central_wave,
+            'delta_wave': delta_wave,
+            'trapz_wave': trapz_wave,
+            'trapz_width': trapz_width,
+            'mean_wave': mean_wave,
+            'mean_width': mean_width,
+            'mean_1_wave': mean_1_wave,
+            'mean_1_width': mean_1_width}
+    df = pd.DataFrame(data)
+    logger.info('Writing central wavelengths to csv file')
+    df.to_csv(os.path.join(workdir, 'central_wavelengths.csv'), index=False)
 
 
 if __name__ == '__main__':
