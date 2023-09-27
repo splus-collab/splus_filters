@@ -129,6 +129,7 @@ def get_lab_curves(args):
         logger.info(" ".join(['The transmission level is calculated from the',
                     'average of the measures in the lab file.']))
         mid_columns_average = df[df.columns[2:-1]].mean(axis=1)
+        mid_columns_std = df[df.columns[2:-1]].std(axis=1)
         transmission_mean = mid_columns_average / df[[1, 102]].mean(axis=1)
         wave = df[0]
 
@@ -147,7 +148,7 @@ def get_lab_curves(args):
             sys.exit(1)
         logger.debug('Loding filters to memory.')
         lab_filters[filter_file.split('/')[-1].split('.')[0]] = \
-            {'wave': wave, 'transm': transmission_mean}
+            {'wave': wave, 'transm': transmission_mean, 'std': mid_columns_std}
 
     return lab_filters
 
@@ -319,7 +320,9 @@ def calc_trasm_curve(lab_filters, fnames2filters, args):
     for lab_curve in lab_filters:
         lab_wave = lab_filters[lab_curve]['wave']
         lab_transm = lab_filters[lab_curve]['transm']
+        lab_std = lab_filters[lab_curve]['std']
         lab_ius = interp1d(lab_wave, lab_transm)
+        std_ius = interp1d(lab_wave, lab_std)
         xmin = np.array([min(atm_wave / 10.), min(mirror_wave),
                          min(ccd_wave), min(lab_wave)])
         wave_range = np.arange(max(xmin), max(lab_wave), 1.)
@@ -335,11 +338,12 @@ def calc_trasm_curve(lab_filters, fnames2filters, args):
                             new_ccd_eff)
 
         if args.save_csv_filters:
-            dat = wave_range, new_filter_trans
+            new_std = std_ius(wave_range)
+            dat = wave_range, new_filter_trans, new_std
             outputname = "".join([fnames2filters[lab_curve]['fname'], '.csv'])
             logger.info('Wrinting file: %s.', outputname)
             np.savetxt(outputname, np.transpose(dat), delimiter=',',
-                       header='wavelength,transmittance')
+                       header='wavelength,transmittance,std')
             if args.show_individual_filters:
                 logger.info('Plotting filter: %s.', lab_curve)
                 plt.plot(wave_range, new_filter_trans, fnames2filters[lab_curve]['color'],
