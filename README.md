@@ -79,4 +79,3 @@ This code is licensed under the [GNU v3.0 License](LICENSE).
 ## Acknowledgments
 
 T80S Technical Team
-```
