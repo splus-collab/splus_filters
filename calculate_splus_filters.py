@@ -93,6 +93,8 @@ def main(args):
                     outname='convoluted_curves_mean.png', figlevel='mean')
     plot_lab_curves(allcurves, fnames2filters, args,
                     outname='convoluted_curves_mean_1.png', figlevel='mean_1')
+    plot_lab_curves(allcurves, fnames2filters, args,
+                    outname='convoluted_curves_pivot.png', figlevel='pivot')
     make_html(allcurves, fnames2filters, args)
     if args.save_central_wavelentghs:
         make_csv_of_central_lambdas(allcurves, fnames2filters, args)
@@ -222,6 +224,15 @@ def plot_lab_curves(lab_filters, fnames2filters, args, outname='fig.png', figlev
                 lab_filters[filter_name]['mean_1']['delta_wave'] / 2.
             ax.fill_between([min_wave, max_wave], 0, t.max(), color='brown',
                             alpha=0.7)
+            ax.plot([centr_wave, centr_wave], [
+                    0, t.max()], '--', color='k', lw=1.5)
+        elif figlevel == 'pivot':
+            title = 'Method: Pivot lambda'
+            centr_wave = lab_filters[filter_name]['pivot']['central_wave']
+            min_wave = lab_filters[filter_name]['pivot']['central_wave'] - \
+                lab_filters[filter_name]['pivot']['delta_wave'] / 2.
+            max_wave = lab_filters[filter_name]['pivot']['central_wave'] + \
+                lab_filters[filter_name]['pivot']['delta_wave'] / 2.
             ax.plot([centr_wave, centr_wave], [
                     0, t.max()], '--', color='k', lw=1.5)
         else:
@@ -465,6 +476,13 @@ def calculate_central_lambda(allcurves, fnames2filters, args):
         allcurves[curve]['mean_1'] = {'central_wave': lambda_mean,
                                       'delta_wave': mean_width}
 
+        logger.debug('Calculating pivot wavelength')
+        lambda_pivot = np.sqrt(np.sum(synt_transm) /
+                               np.sum(synt_transm / synt_wave**2))
+        mean_pivot = max_wave - min_wave
+        allcurves[curve]['pivot'] = {'central_wave': lambda_pivot,
+                                     'delta_wave': mean_pivot}
+
     return allcurves
 
 
@@ -475,7 +493,7 @@ def make_html(allcurves, fnames2filters, args):
     htmlf.write('<table class="docutils" style="width:100%" border=1>\n')
     htmlf.write('<colgroup>\n')
     htmlf.write('<tr>')
-    htmlf.write('<th colspan="9"><b>S-PLUS filters summary</b></th>\n')
+    htmlf.write('<th colspan="10"><b>S-PLUS filters summary</b></th>\n')
     htmlf.write('</tr>\n')
     htmlf.write('<tr>')
     htmlf.write('<td>Filter</td>\n')
@@ -487,6 +505,7 @@ def make_html(allcurves, fnames2filters, args):
     htmlf.write('<td>Δλ<sub>mean</sub></td>\n')
     htmlf.write('<td>λ<sub>mean</sub> (>1%)</td>\n')
     htmlf.write('<td>W<sub>mean</sub> (>1%)</td>\n')
+    htmlf.write('<td>λ<sub>pivot</sub></td>\n')
     htmlf.write('</tr>\n')
     htmlf.write('</colgroup>\n')
     logger.info('Writing central wavelengths to html file')
@@ -508,6 +527,8 @@ def make_html(allcurves, fnames2filters, args):
                     allcurves[curve]['mean_1']['central_wave'])
         htmlf.write('<td>%.0f</td>\n' %
                     allcurves[curve]['mean_1']['delta_wave'])
+        htmlf.write('<td>%.0f</td>\n' %
+                    allcurves[curve]['pivot']['central_wave'])
         htmlf.write('</tr>\n')
     htmlf.write('</table>\n')
     htmlf.write('</div>\n')
@@ -527,6 +548,7 @@ def make_csv_of_central_lambdas(allcurves, fnames2filters, args):
     mean_width = []
     mean_1_wave = []
     mean_1_width = []
+    pivot_wave = []
     for curve in fnames2filters.keys():
         logger.debug('Getting params for %s' % fnames2filters[curve]['fname'])
         filters.append(fnames2filters[curve]['fname'])
@@ -538,6 +560,7 @@ def make_csv_of_central_lambdas(allcurves, fnames2filters, args):
         mean_width.append(allcurves[curve]['mean']['delta_wave'])
         mean_1_wave.append(allcurves[curve]['mean_1']['central_wave'])
         mean_1_width.append(allcurves[curve]['mean_1']['delta_wave'])
+        pivot_wave.append(allcurves[curve]['pivot']['central_wave'])
     data = {'filter': filters,
             'central_wave': central_wave,
             'delta_wave': delta_wave,
@@ -546,10 +569,12 @@ def make_csv_of_central_lambdas(allcurves, fnames2filters, args):
             'mean_wave': mean_wave,
             'mean_width': mean_width,
             'mean_1_wave': mean_1_wave,
-            'mean_1_width': mean_1_width}
+            'mean_1_width': mean_1_width,
+            'pivot_wave': pivot_wave}
     df = pd.DataFrame(data)
     logger.info('Writing central wavelengths to csv file')
     df.to_csv(os.path.join(workdir, 'central_wavelengths.csv'), index=False)
+    del logger
 
 
 if __name__ == '__main__':
