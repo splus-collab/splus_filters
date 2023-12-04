@@ -38,7 +38,7 @@ def get_args():
     parser = argparse.ArgumentParser(description=" ".join([
         'Calculate the transmission curve or a given filtre.',
         'Estimate the central lambda from the FWHM of that filter.']))
-    parser.add_argument('--work_dir', type=str, help='Working directory.',
+    parser.add_argument('--work_dir', type=str, help='Working directory. Default: current directory.',
                         default=os.getcwd())
     parser.add_argument('--save_plots', action='store_true',
                         help='Save the plot of the filter.')
@@ -50,6 +50,8 @@ def get_args():
                         help='Show the individual filters. Only activate when --save_csv_filters is used.')
     parser.add_argument('--show_plots', action='store_true',
                         help='Show the main plots.')
+    parser.add_argument('--prepare_latex', action='store_true',
+                        help='Prepare the latex table with the central wavelengths.')
     parser.add_argument('--loglevel', type=str, help='Log level.',
                         default='INFO')
     parser.add_argument('--debug', action='store_true',
@@ -102,8 +104,8 @@ def main(args):
     make_html(allcurves, fnames2filters, args)
     if args.save_central_wavelentghs:
         make_csv_of_central_lambdas(allcurves, fnames2filters, args)
-
-    # return allcurves
+    if args.prepare_latex:
+        prepare_latex_table(allcurves, fnames2filters, args)
 
 
 def get_lab_curves(args):
@@ -729,6 +731,42 @@ def calculate_alambda(allcurves, fnames2filters, args):
 
     del logger
     return allcurves
+
+
+def prepare_latex_table(allcurves, fnames2filters, args):
+    """
+    Prepare a latex table with the central wavelengths of the filters.
+    """
+
+    logger = get_logger(__name__, loglevel=args.loglevel)
+    logger.info('Preparing latex table')
+    latex_filename = os.path.join(args.work_dir, 'central_wavelengths.tex')
+    with open(latex_filename, 'w') as f:
+        f.write('\\begin{table*}\n')
+        f.write('\\centering\n')
+        f.write('\\caption{Central wavelengths of the S-PLUS filters.}\n')
+        f.write('\\label{tab:central_wavelengths}\n')
+        f.write('\\begin{tabular}{ccccccc}\n')
+        f.write('\\hline\n')
+        f.write('\\hline\n')
+        f.write(
+            'Filter & $\\lambda_{\\mathrm{central}}$ & FWHM & $\\lambda_{\\mathrm{mean}}$ & $\\Delta\\lambda_{\\mathrm{mean}}$ & $\\lambda_{\\mathrm{pivot}}$ & $A_{\\lambda}/A_{V}$ \\\\\n')
+        f.write(" & [\\AA] & [\\AA] & [\\AA] & [\\AA] & [\\AA] & \\\\\n")
+        f.write('\\hline\n')
+        for curve in fnames2filters.keys():
+            f.write('%s & %.0f & %.0f & %.0f & %.0f & %.0f & %.3f\\\\\n' %
+                    (fnames2filters[curve]['fname'],
+                     allcurves[curve]['central']['central_wave'],
+                     allcurves[curve]['central']['delta_wave'],
+                     allcurves[curve]['mean']['central_wave'],
+                     allcurves[curve]['mean']['delta_wave'],
+                     allcurves[curve]['pivot']['central_wave'],
+                     allcurves[curve]['a_lambda_a_v']))
+        f.write('\\hline\n')
+        f.write('\\end{tabular}\n')
+        f.write('\\end{table*}\n')
+    del logger
+    return
 
 
 if __name__ == '__main__':
