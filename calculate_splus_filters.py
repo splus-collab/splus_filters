@@ -7,7 +7,7 @@ import os
 import sys
 import argparse
 import pandas as pd
-from astropy.io import fits
+from astropy.io import fits, ascii
 import glob
 import colorlog
 import logging
@@ -95,10 +95,12 @@ def main(args):
                     outname='convoluted_curves_mean_1.png', figlevel='mean_1')
     plot_lab_curves(allcurves, fnames2filters, args,
                     outname='convoluted_curves_pivot.png', figlevel='pivot')
+    calculate_alambda(allcurves, fnames2filters, args)
     make_html(allcurves, fnames2filters, args)
     if args.save_central_wavelentghs:
         make_csv_of_central_lambdas(allcurves, fnames2filters, args)
-    return allcurves
+
+    # return allcurves
 
 
 def get_lab_curves(args):
@@ -152,6 +154,7 @@ def get_lab_curves(args):
         lab_filters[filter_file.split('/')[-1].split('.')[0]] = \
             {'wave': wave, 'transm': transmission_mean, 'std': mid_columns_std}
 
+    del logger
     return lab_filters
 
 
@@ -258,6 +261,7 @@ def plot_lab_curves(lab_filters, fnames2filters, args, outname='fig.png', figlev
     else:
         logger.debug('Closing plot.')
         plt.close()
+    del logger
 
 
 def calc_trasm_curve(lab_filters, fnames2filters, args):
@@ -368,6 +372,7 @@ def calc_trasm_curve(lab_filters, fnames2filters, args):
                                 'fname': fnames2filters[lab_curve]['fname'],
                                 'color': fnames2filters[lab_curve]['color']}
 
+    del logger
     return allcurves
 
 
@@ -429,6 +434,7 @@ def make_final_plot(allcurves, fnames2filters, args):
         plt.close()
     else:
         plt.close()
+    del logger
 
 
 def calculate_central_lambda(allcurves, fnames2filters, args):
@@ -483,6 +489,7 @@ def calculate_central_lambda(allcurves, fnames2filters, args):
         allcurves[curve]['pivot'] = {'central_wave': lambda_pivot,
                                      'delta_wave': mean_pivot}
 
+    del logger
     return allcurves
 
 
@@ -493,7 +500,7 @@ def make_html(allcurves, fnames2filters, args):
     htmlf.write('<table class="docutils" style="width:100%" border=1>\n')
     htmlf.write('<colgroup>\n')
     htmlf.write('<tr>')
-    htmlf.write('<th colspan="10"><b>S-PLUS filters summary</b></th>\n')
+    htmlf.write('<th colspan="11"><b>S-PLUS filters summary</b></th>\n')
     htmlf.write('</tr>\n')
     htmlf.write('<tr>')
     htmlf.write('<td>Filter</td>\n')
@@ -506,6 +513,7 @@ def make_html(allcurves, fnames2filters, args):
     htmlf.write('<td>λ<sub>mean</sub> (>1%)</td>\n')
     htmlf.write('<td>W<sub>mean</sub> (>1%)</td>\n')
     htmlf.write('<td>λ<sub>pivot</sub></td>\n')
+    htmlf.write('<td>A<sub>λ</sub>/A<sub>V</sub></td>\n')
     htmlf.write('</tr>\n')
     htmlf.write('</colgroup>\n')
     logger.info('Writing central wavelengths to html file')
@@ -529,10 +537,12 @@ def make_html(allcurves, fnames2filters, args):
                     allcurves[curve]['mean_1']['delta_wave'])
         htmlf.write('<td>%.0f</td>\n' %
                     allcurves[curve]['pivot']['central_wave'])
+        htmlf.write('<td>%.3f</td>\n' % allcurves[curve]['a_lambda_a_v'])
         htmlf.write('</tr>\n')
     htmlf.write('</table>\n')
     htmlf.write('</div>\n')
     htmlf.close()
+    del logger
 
 
 def make_csv_of_central_lambdas(allcurves, fnames2filters, args):
@@ -549,6 +559,7 @@ def make_csv_of_central_lambdas(allcurves, fnames2filters, args):
     mean_1_wave = []
     mean_1_width = []
     pivot_wave = []
+    alambda_av = []
     for curve in fnames2filters.keys():
         logger.debug('Getting params for %s' % fnames2filters[curve]['fname'])
         filters.append(fnames2filters[curve]['fname'])
@@ -561,6 +572,7 @@ def make_csv_of_central_lambdas(allcurves, fnames2filters, args):
         mean_1_wave.append(allcurves[curve]['mean_1']['central_wave'])
         mean_1_width.append(allcurves[curve]['mean_1']['delta_wave'])
         pivot_wave.append(allcurves[curve]['pivot']['central_wave'])
+        alambda_av.append(allcurves[curve]['a_lambda_a_v'])
     data = {'filter': filters,
             'central_wave': central_wave,
             'delta_wave': delta_wave,
@@ -570,11 +582,38 @@ def make_csv_of_central_lambdas(allcurves, fnames2filters, args):
             'mean_width': mean_width,
             'mean_1_wave': mean_1_wave,
             'mean_1_width': mean_1_width,
-            'pivot_wave': pivot_wave}
+            'pivot_wave': pivot_wave,
+            'alambda_av': alambda_av}
     df = pd.DataFrame(data)
     logger.info('Writing central wavelengths to csv file')
     df.to_csv(os.path.join(workdir, 'central_wavelengths.csv'), index=False)
     del logger
+
+
+def calculate_alambda(allcurves, fnames2filters, args):
+    logger = get_logger(__name__, loglevel=args.loglevel)
+    logger.info('Calculating A_lambda')
+    workdir = args.work_dir
+    data_extra_dir = os.path.join(workdir, 'data-extra')
+    if not os.path.exists(data_extra_dir):
+        logger.critical(
+            'Directory %s does not exist. Please make sure work_dir points to the right place.' % data_extra_dir)
+        raise ValueError(
+            'Directory %s does not exist. Please make sure work_dir points to the right place.' % data_extra_dir)
+    data_extinction_file = os.path.join(
+        data_extra_dir, 'ExtLaw_FitzIndeb_3.1.dat')
+    opacity_tab = ascii.read(data_extinction_file)
+    opacity_wave = opacity_tab['wave(A)']
+    opacity = opacity_tab['opacity(cm2/g)']
+    kv = 211.4
+    interp_opacity = interp1d(opacity_wave, opacity)
+    for curve in fnames2filters.keys():
+        lambda_pivot = allcurves[curve]['pivot']['central_wave']
+        a_lambda_a_v = interp_opacity(lambda_pivot) / kv
+        allcurves[curve]['a_lambda_a_v'] = a_lambda_a_v
+
+    del logger
+    return allcurves
 
 
 if __name__ == '__main__':
