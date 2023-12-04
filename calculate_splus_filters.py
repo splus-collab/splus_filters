@@ -14,6 +14,7 @@ import logging
 
 
 def get_logger(name, loglevel='INFO'):
+    """Return a logger with a default ColoredFormatter."""
     logger = logging.getLogger(name)
     logger.setLevel(loglevel)
     handler = logging.StreamHandler()
@@ -33,6 +34,7 @@ def get_logger(name, loglevel='INFO'):
 
 
 def get_args():
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser(description=" ".join([
         'Calculate the transmission curve or a given filtre.',
         'Estimate the central lambda from the FWHM of that filter.']))
@@ -58,6 +60,7 @@ def get_args():
 
 
 def main(args):
+    """Main function. Run all steps of the code in the sequence required."""
 
     fnames2filters = {
         '20150918C080uJAVA02': {'fname': 'uJAVA', 'color': 'navy', 'pos': (3563, -500, -4)},
@@ -104,6 +107,22 @@ def main(args):
 
 
 def get_lab_curves(args):
+    """
+    Read the lab files and return a dictionary with the transmission curves.
+    The files containing the lab measures were sent to the S-PLUS team by
+    the J-PLUS team. The files were read and the transmission curves were
+    calculated as the average of the measures. The files for each filter
+    contain the wavelength, the lab transmission (before convolution with
+    atmosphere and instrument), and the standard deviation of the measures.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+
+    Returns
+    -------
+    lab_filters : dict
+    """
     logger = get_logger(__name__, loglevel=args.loglevel)
     work_dir = args.work_dir
     data_dir = 'data-from-lab'
@@ -159,6 +178,17 @@ def get_lab_curves(args):
 
 
 def plot_lab_curves(lab_filters, fnames2filters, args, outname='fig.png', figlevel='lab'):
+    """
+    Plot the lab transmission curves for each filter and configuration.
+
+    Parameters
+    ----------
+    lab_filters : dict
+    fnames2filters : dict
+    args : argparse.Namespace
+    outname : str
+    figlevel : str
+    """
     logger = get_logger(__name__, loglevel=args.loglevel)
     fig = plt.figure(figsize=(10, 10))
     for i, filter_name in enumerate(fnames2filters.keys()):
@@ -265,6 +295,19 @@ def plot_lab_curves(lab_filters, fnames2filters, args, outname='fig.png', figlev
 
 
 def calc_trasm_curve(lab_filters, fnames2filters, args):
+    """
+    Calculate the transmission curve of the filters.
+
+    Parameters
+    ----------
+    lab_filters : dict
+    fnames2filters : dict
+    args : argparse.Namespace
+
+    Returns
+    -------
+    allcurves : dict
+    """
     logger = get_logger(__name__, loglevel=args.loglevel)
     logger.info('Calculating transmission curves.')
     work_dir = args.work_dir
@@ -377,6 +420,14 @@ def calc_trasm_curve(lab_filters, fnames2filters, args):
 
 
 def plot_all_curves(allcurves, args):
+    """
+    Plot all the transmission curves in the same plot.
+
+    Parameters
+    ----------
+    allcurves : dict
+    args : argparse.Namespace
+    """
     logger = get_logger(__name__, loglevel=args.loglevel)
     work_dir = args.work_dir
     plt.figure(figsize=(10, 6))
@@ -403,6 +454,16 @@ def plot_all_curves(allcurves, args):
 
 
 def make_final_plot(allcurves, fnames2filters, args):
+    """
+    Make the final plot of the transmission curves.
+
+    Parameters
+    ----------
+    allcurves : dict
+    fnames2filters : dict
+    args : argparse.Namespace
+    """
+
     logger = get_logger(__name__, loglevel=args.loglevel)
     logger.info('Making presentation plot.')
     work_dir = args.work_dir
@@ -438,6 +499,20 @@ def make_final_plot(allcurves, fnames2filters, args):
 
 
 def calculate_central_lambda(allcurves, fnames2filters, args):
+    """
+    Calculate the central wavelength of the filters.
+
+    Parameters
+    ----------
+    allcurves : dict
+    fnames2filters : dict
+    args : argparse.Namespace
+
+    Returns
+    -------
+    allcurves : dict
+    """
+
     logger = get_logger(__name__, loglevel=args.loglevel)
     logger.info('Calculating central wavelength')
 
@@ -494,6 +569,15 @@ def calculate_central_lambda(allcurves, fnames2filters, args):
 
 
 def make_html(allcurves, fnames2filters, args):
+    """
+    Make a html file with the central wavelengths of the filters.
+
+    Parameters
+    ----------
+    allcurves : dict
+    fnames2filters : dict
+    args : argparse.Namespace
+    """
     logger = get_logger(__name__, loglevel=args.loglevel)
     htmlf = open(os.path.join(args.work_dir, 'central_wavelengths.html'), 'w')
     htmlf.write('<div class="dlpage">\n')
@@ -546,6 +630,19 @@ def make_html(allcurves, fnames2filters, args):
 
 
 def make_csv_of_central_lambdas(allcurves, fnames2filters, args):
+    """
+    Make a csv file with the central wavelengths of the filters.
+
+    Parameters
+    ----------
+    allcurves : dict
+    fnames2filters : dict
+    args : argparse.Namespace
+
+    Returns
+    -------
+    allcurves : dict
+    """
     logger = get_logger(__name__, loglevel=args.loglevel)
     workdir = args.work_dir
     logger.info('Writing central wavelengths to csv file')
@@ -591,6 +688,24 @@ def make_csv_of_central_lambdas(allcurves, fnames2filters, args):
 
 
 def calculate_alambda(allcurves, fnames2filters, args):
+    """
+    Calculate the A_lambda/A_V for each filter.
+    The opacity file was obtained from:
+    http://svo2.cab.inta-csic.es/theory/fps/getextlaw.php
+    The value for kv was obtained from:
+    http://svo2.cab.inta-csic.es/theory/fps/index.php?id=CTIO/S-PLUS.z&&mode=browse&gname=CTIO&gname2=S-PLUS#filter
+
+    Parameters
+    ----------
+    allcurves : dict
+    fnames2filters : dict
+    args : argparse.Namespace
+
+    Returns
+    -------
+    allcurves : dict
+    """
+
     logger = get_logger(__name__, loglevel=args.loglevel)
     logger.info('Calculating A_lambda')
     workdir = args.work_dir
