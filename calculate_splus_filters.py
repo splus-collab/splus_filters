@@ -65,18 +65,18 @@ def main(args):
     """Main function. Run all steps of the code in the sequence required."""
 
     fnames2filters = {
-        '20150918C080uJAVA02': {'fname': 'uJAVA', 'color': 'navy', 'pos': (3563, -500, -4)},
+        '20150918C080uJAVA02': {'fname': 'uJAVA', 'color': 'indigo', 'pos': (3563, -200, -4)},
         '20150429C080F037802': {'fname': 'J0378', 'color': 'darkviolet', 'pos': (3770, -350, 1)},
-        '20150922C080F039502': {'fname': 'J0395', 'color': 'b', 'pos': (3940, -400, 1)},
-        '20150923C080F041002': {'fname': 'J0410', 'color': 'dodgerblue', 'pos': (4094, -350, -0.1)},
-        '20150514C080F043002': {'fname': 'J0430', 'color': 'c', 'pos': (4292, -400, 1.3)},
-        '20150924C080gSDSS02': {'fname': 'gDSSS', 'color': 'turquoise', 'pos': (4751, -300, 0.)},
+        '20150922C080F039502': {'fname': 'J0395', 'color': 'navy', 'pos': (3940, -400, 1)},
+        '20150923C080F041002': {'fname': 'J0410', 'color': 'b', 'pos': (4094, -350, -0.1)},
+        '20150514C080F043002': {'fname': 'J0430', 'color': 'dodgerblue', 'pos': (4292, -400, 1.3)},
+        '20150924C080gSDSS02': {'fname': 'gSDSS', 'color': 'turquoise', 'pos': (4751, -200, 0.)},
         '20140606C080F051502': {'fname': 'J0515', 'color': 'lime', 'pos': (5133, -100, 1.5)},
-        '20140604C080F062502': {'fname': 'rSDSS', 'color': 'greenyellow', 'pos': (6258, -500, -2)},
-        '20140609C080F066002': {'fname': 'J0660', 'color': 'orange', 'pos': (6614, -300, 1)},
-        '20150506C080iSDSS02': {'fname': 'iSDSS', 'color': 'darkorange', 'pos': (7690, -300, 1)},
+        '20140604C080F062502': {'fname': 'rSDSS', 'color': 'limegreen', 'pos': (6258, -200, -2)},
+        '20140609C080F066002': {'fname': 'J0660', 'color': 'y', 'pos': (6614, -300, 1)},
+        '20150506C080iSDSS02': {'fname': 'iSDSS', 'color': 'darkorange', 'pos': (7690, -100, 1)},
         '20150922C080F086102': {'fname': 'J0861', 'color': 'orangered', 'pos': (8611, -250, 1)},
-        '20150504C080zSDSS02': {'fname': 'zSDSS', 'color': 'r', 'pos': (8831, 300, -12)}}
+        '20150504C080zSDSS02': {'fname': 'zSDSS', 'color': 'darkred', 'pos': (8831, 300, -12)}}
 
     logger = get_logger(__name__, loglevel=args.loglevel)
     logger.info('Calculating the lab transmission curves of the filters.')
@@ -475,10 +475,23 @@ def make_final_plot(allcurves, fnames2filters, args):
                  allcurves[key]['transm'] * 100.,
                  color=fnames2filters[key]['color'],
                  label=fnames2filters[key]['fname'], lw=2)
+
+        if fnames2filters[key]['fname'] == 'uJAVA':
+            fname = 'u'
+        elif fnames2filters[key]['fname'] == 'gSDSS':
+            fname = 'g'
+        elif fnames2filters[key]['fname'] == 'rSDSS':
+            fname = 'r'
+        elif fnames2filters[key]['fname'] == 'iSDSS':
+            fname = 'i'
+        elif fnames2filters[key]['fname'] == 'zSDSS':
+            fname = 'z'
+        else:
+            fname = fnames2filters[key]['fname']
         plt.text(fnames2filters[key]['pos'][0] + fnames2filters[key]['pos'][1],
                  max(allcurves[key]['transm'] * 100.) +
                  fnames2filters[key]['pos'][2],
-                 fnames2filters[key]['fname'], fontsize=12, color=fnames2filters[key]['color'])
+                 fname, fontsize=12, color=fnames2filters[key]['color'])
 
     plt.xlabel(r'$\lambda\ \mathrm{[\AA]}$', fontsize=16)
     plt.ylabel(r'$R_\lambda\ \mathrm{[\%]}$', fontsize=16)
