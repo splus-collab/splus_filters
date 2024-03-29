@@ -13,7 +13,10 @@ import colorlog
 import logging
 
 
-def get_logger(name, loglevel='INFO'):
+def get_logger(
+    name: str,
+    loglevel: str = 'INFO'
+):
     """Return a logger with a default ColoredFormatter."""
     logger = logging.getLogger(name)
     logger.setLevel(loglevel)
@@ -61,8 +64,14 @@ def get_args():
     return args
 
 
-def main(args):
-    """Main function. Run all steps of the code in the sequence required."""
+def main(
+    args: argparse.Namespace,
+):
+    """Main function. Run all steps of the code in the sequence required.
+    Parameters
+    ----------
+    args : argparse.Namespace
+    """
 
     fnames2filters = {
         '20150918C080uJAVA02': {'fname': 'uJAVA', 'color': 'indigo', 'pos': (3563, -200, -4)},
@@ -108,7 +117,9 @@ def main(args):
         prepare_latex_table(allcurves, fnames2filters, args)
 
 
-def get_lab_curves(args):
+def get_lab_curves(
+    args: argparse.Namespace
+):
     """
     Read the lab files and return a dictionary with the transmission curves.
     The files containing the lab measures were sent to the S-PLUS team by
@@ -179,7 +190,13 @@ def get_lab_curves(args):
     return lab_filters
 
 
-def plot_lab_curves(lab_filters, fnames2filters, args, outname='fig.png', figlevel='lab'):
+def plot_lab_curves(
+    lab_filters: dict,
+    fnames2filters: dict,
+    args: argparse.Namespace,
+    outname: str = 'fig.png',
+    figlevel: str = 'lab'
+):
     """
     Plot the lab transmission curves for each filter and configuration.
 
@@ -295,8 +312,14 @@ def plot_lab_curves(lab_filters, fnames2filters, args, outname='fig.png', figlev
         plt.close()
     del logger
 
+    return
 
-def calc_trasm_curve(lab_filters, fnames2filters, args):
+
+def calc_trasm_curve(
+    lab_filters: dict,
+    fnames2filters: dict,
+    args: argparse.Namespace
+):
     """
     Calculate the transmission curve of the filters.
 
@@ -421,7 +444,10 @@ def calc_trasm_curve(lab_filters, fnames2filters, args):
     return allcurves
 
 
-def plot_all_curves(allcurves, args):
+def plot_all_curves(
+    allcurves: dict,
+    args: argparse.Namespace
+):
     """
     Plot all the transmission curves in the same plot.
 
@@ -455,7 +481,11 @@ def plot_all_curves(allcurves, args):
         plt.close()
 
 
-def make_final_plot(allcurves, fnames2filters, args):
+def make_final_plot(
+    allcurves: dict,
+    fnames2filters: dict,
+    args: argparse.Namespace
+):
     """
     Make the final plot of the transmission curves.
 
@@ -513,7 +543,11 @@ def make_final_plot(allcurves, fnames2filters, args):
     del logger
 
 
-def calculate_central_lambda(allcurves, fnames2filters, args):
+def calculate_central_lambda(
+    allcurves: dict,
+    fnames2filters: dict,
+    args: argparse.Namespace
+):
     """
     Calculate the central wavelength of the filters.
 
@@ -536,7 +570,7 @@ def calculate_central_lambda(allcurves, fnames2filters, args):
         transm = allcurves[curve]['transm']
         interp = interp1d(wave, transm)
         synt_wave = np.linspace(min(wave), max(wave), 100000)
-        synt_transm = interp(synt_wave)
+        synt_transm = interp(synt_wave) * synt_wave
         logger.debug('Claculating curves via trapezoidal rule approach')
         half_height = max(synt_transm) / 2.
         left_index = np.where(synt_transm > half_height)[0][0]
@@ -583,7 +617,11 @@ def calculate_central_lambda(allcurves, fnames2filters, args):
     return allcurves
 
 
-def make_html(allcurves, fnames2filters, args):
+def make_html(
+    allcurves: dict,
+    fnames2filters: dict,
+    args: argparse.Namespace
+):
     """
     Make a html file with the central wavelengths of the filters.
 
@@ -644,7 +682,11 @@ def make_html(allcurves, fnames2filters, args):
     del logger
 
 
-def make_csv_of_central_lambdas(allcurves, fnames2filters, args):
+def make_csv_of_central_lambdas(
+    allcurves: dict,
+    fnames2filters: dict,
+    args: argparse.Namespace
+):
     """
     Make a csv file with the central wavelengths of the filters.
 
@@ -702,7 +744,11 @@ def make_csv_of_central_lambdas(allcurves, fnames2filters, args):
     del logger
 
 
-def calculate_alambda(allcurves, fnames2filters, args):
+def calculate_alambda(
+    allcurves: dict,
+    fnames2filters: dict,
+    args: argparse.Namespace
+):
     """
     Calculate the A_lambda/A_V for each filter.
     The opacity file was obtained from:
@@ -746,7 +792,11 @@ def calculate_alambda(allcurves, fnames2filters, args):
     return allcurves
 
 
-def prepare_latex_table(allcurves, fnames2filters, args):
+def prepare_latex_table(
+    allcurves: dict,
+    fnames2filters: dict,
+    args: argparse.Namespace
+):
     """
     Prepare a latex table with the central wavelengths of the filters.
     """
