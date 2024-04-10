@@ -11,6 +11,7 @@ from astropy.io import fits, ascii
 import glob
 import colorlog
 import logging
+from dust_laws import CCM
 
 
 def get_logger(
@@ -212,8 +213,8 @@ def plot_lab_curves(
     fig = plt.figure(figsize=(10, 10))
     for i, filter_name in enumerate(fnames2filters.keys()):
         ax = fig.add_subplot(4, 3, i+1)
-        w = lab_filters[filter_name]['wave'] * 10.
-        t = lab_filters[filter_name]['transm']
+        w = np.array(lab_filters[filter_name]['wave'] * 10.)
+        t = np.array(lab_filters[filter_name]['transm'])
         if t.max() > 1.:
             t = t / 100.
         logger.debug('Plotting filter: %s' % filter_name)
@@ -460,8 +461,8 @@ def plot_all_curves(
     work_dir = args.work_dir
     plt.figure(figsize=(10, 6))
     for curve in allcurves.keys():
-        plt.plot(allcurves[curve]['wave'],
-                 allcurves[curve]['transm'],
+        plt.plot(np.array(allcurves[curve]['wave']),
+                 np.array(allcurves[curve]['transm']),
                  color=allcurves[curve]['color'],
                  label=allcurves[curve]['fname'])
     plt.xlim(300, 1100)
@@ -651,6 +652,7 @@ def make_html(
     htmlf.write('<td>W<sub>mean</sub> (>1%)</td>\n')
     htmlf.write('<td>λ<sub>pivot</sub></td>\n')
     htmlf.write('<td>A<sub>λ</sub>/A<sub>V</sub></td>\n')
+    htmlf.write('<td>A<sub>λ</sub>/A<sub>V</sub> (CCM)</td>\n')
     htmlf.write('</tr>\n')
     htmlf.write('</colgroup>\n')
     logger.info('Writing central wavelengths to html file')
@@ -675,6 +677,7 @@ def make_html(
         htmlf.write('<td>%.0f</td>\n' %
                     allcurves[curve]['pivot']['central_wave'])
         htmlf.write('<td>%.3f</td>\n' % allcurves[curve]['a_lambda_a_v'])
+        htmlf.write('<td>%.3f</td>\n' % allcurves[curve]['a_lambda_a_v_ccm'])
         htmlf.write('</tr>\n')
     htmlf.write('</table>\n')
     htmlf.write('</div>\n')
@@ -714,6 +717,7 @@ def make_csv_of_central_lambdas(
     mean_1_width = []
     pivot_wave = []
     alambda_av = []
+    alambda_av_ccm = []
     for curve in fnames2filters.keys():
         logger.debug('Getting params for %s' % fnames2filters[curve]['fname'])
         filters.append(fnames2filters[curve]['fname'])
@@ -727,6 +731,7 @@ def make_csv_of_central_lambdas(
         mean_1_width.append(allcurves[curve]['mean_1']['delta_wave'])
         pivot_wave.append(allcurves[curve]['pivot']['central_wave'])
         alambda_av.append(allcurves[curve]['a_lambda_a_v'])
+        alambda_av_ccm.append(allcurves[curve]['a_lambda_a_v_ccm'])
     data = {'filter': filters,
             'central_wave': central_wave,
             'delta_wave': delta_wave,
@@ -737,7 +742,8 @@ def make_csv_of_central_lambdas(
             'mean_1_wave': mean_1_wave,
             'mean_1_width': mean_1_width,
             'pivot_wave': pivot_wave,
-            'alambda_av': alambda_av}
+            'alambda_av': alambda_av,
+            'alambda_av_ccm': alambda_av_ccm}
     df = pd.DataFrame(data)
     logger.info('Writing central wavelengths to csv file')
     df.to_csv(os.path.join(workdir, 'central_wavelengths.csv'), index=False)
@@ -787,6 +793,8 @@ def calculate_alambda(
         lambda_pivot = allcurves[curve]['pivot']['central_wave']
         a_lambda_a_v = interp_opacity(lambda_pivot) / kv
         allcurves[curve]['a_lambda_a_v'] = a_lambda_a_v
+        a_lambda_a_v_ccm = CCM(np.array([lambda_pivot]))
+        allcurves[curve]['a_lambda_a_v_ccm'] = a_lambda_a_v_ccm
 
     del logger
     return allcurves
@@ -817,14 +825,15 @@ def prepare_latex_table(
         f.write(" & [\\AA] & [\\AA] & [\\AA] & [\\AA] & [\\AA] & \\\\\n")
         f.write('\\hline\n')
         for curve in fnames2filters.keys():
-            f.write('%s & %.0f & %.0f & %.0f & %.0f & %.0f & %.3f\\\\\n' %
+            f.write('%s & %.0f & %.0f & %.0f & %.0f & %.0f & %.3f & %.3f\\\\\n' %
                     (fnames2filters[curve]['fname'],
                      allcurves[curve]['central']['central_wave'],
                      allcurves[curve]['central']['delta_wave'],
                      allcurves[curve]['mean']['central_wave'],
                      allcurves[curve]['mean']['delta_wave'],
                      allcurves[curve]['pivot']['central_wave'],
-                     allcurves[curve]['a_lambda_a_v']))
+                     allcurves[curve]['a_lambda_a_v'],
+                     allcurves[curve]['a_lambda_a_v_ccm']))
         f.write('\\hline\n')
         f.write('\\end{tabular}\n')
         f.write('\\end{table*}\n')
